@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background-color: #0f0f1a;
+  color: #e8e8e8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0f3460;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1a4a7a;
+}
+
+/* 窗口拖拽区域 */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 编辑器样式 */
+.tiptap-editor {
+  min-height: 400px;
+  outline: none;
+}
+
+.tiptap-editor:focus {
+  outline: none;
+}
+
+.tiptap-editor p {
+  margin-bottom: 1em;
+  line-height: 1.8;
+}
+
+.tiptap-editor h1,
+.tiptap-editor h2,
+.tiptap-editor h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.tiptap-editor blockquote {
+  border-left: 3px solid #0ea5e9;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #a0a0a0;
+}
+
+/* 章节树样式 */
+.chapter-tree .ant-tree-treenode {
+  padding: 4px 0;
+}
+
+.chapter-tree .ant-tree-title {
+  font-size: 14px;
+}
+
+/* 选中高亮 */
+.chapter-tree .ant-tree-node-selected {
+  background-color: rgba(14, 165, 233, 0.2) !important;
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 卡片悬停效果 */
+.hover-card {
+  transition: all 0.2s ease;
+}
+
+.hover-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 按钮渐变效果 */
+.gradient-button {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.gradient-button:hover {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+/* 侧边栏样式 */
+.sidebar-menu .ant-menu-item {
+  margin: 4px 8px;
+  border-radius: 8px;
+}
+
+/* 文字选择 */
+::selection {
+  background-color: rgba(14, 165, 233, 0.3);
+}
+
+/* 禁用文字选择（标题栏等） */
+.no-select {
+  user-select: none;
+}
+
+/* 输入框聚焦样式 */
+.custom-input:focus {
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2) !important;
+}
+
+/* 标签样式 */
+.genre-tag {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(2, 132, 199, 0.2) 100%);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  color: #7dd3fc;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.genre-tag:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(2, 132, 199, 0.3) 100%);
+  border-color: #0ea5e9;
+}
+
+.genre-tag.selected {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border-color: #0ea5e9;
+  color: white;
+}

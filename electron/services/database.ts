@@ -1,0 +1,916 @@
+import Database from 'better-sqlite3'
+import { app } from 'electron'
+import path from 'path'
+import crypto from 'crypto'
+
+// 使用 Node.js 原生 crypto 模块生成 UUID
+const uuidv4 = () => crypto.randomUUID()
+
+export class DatabaseService {
+  private db: Database.Database | null = null
+  private dbPath: string
+
+  constructor() {
+    const userDataPath = app.getPath('userData')
+    this.dbPath = path.join(userDataPath, 'novascribe.db')
+  }
+
+  /**
+   * 初始化数据库
+   */
+  async initialize(): Promise<void> {
+    this.db = new Database(this.dbPath)
+    this.db.pragma('journal_mode = WAL')
+
+    this.createTables()
+  }
+
+  /**
+   * 创建数据表
+   */
+  private createTables(): void {
+    if (!this.db) return
+
+    // 项目表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        inspiration TEXT,
+        constraints TEXT,
+        scale TEXT DEFAULT 'million',
+        genres TEXT DEFAULT '[]',
+        styles TEXT DEFAULT '[]',
+        world_setting TEXT,
+        summary TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        synced_at TEXT
+      )
+    `)
+
+    // 卷表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS volumes (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `)
+
+    // 迁移：为volumes表添加新字段（优化大纲一致性）
+    try {
+      this.db.exec(`ALTER TABLE volumes ADD COLUMN key_points TEXT DEFAULT '[]'`)
+    } catch { /* 字段已存在 */ }
+    try {
+      this.db.exec(`ALTER TABLE volumes ADD COLUMN brief_chapters TEXT DEFAULT '[]'`)
+    } catch { /* 字段已存在 */ }
+
+    // 章节表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS chapters (
+        id TEXT PRIMARY KEY,
+        volume_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        outline TEXT,
+        content TEXT,
+        word_count INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (volume_id) REFERENCES volumes(id) ON DELETE CASCADE
+      )
+    `)
+
+    // 角色表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS characters (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT DEFAULT 'supporting',
+        gender TEXT,
+        age TEXT,
+        identity TEXT,
+        description TEXT,
+        arc TEXT,
+        status TEXT DEFAULT 'pending',
+        death_chapter TEXT,
+        appearances TEXT DEFAULT '[]',
+        relationships TEXT DEFAULT '[]',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `)
+
+    // 迁移：为旧表添加新字段
+    try {
+      this.db.exec(`ALTER TABLE characters ADD COLUMN death_chapter TEXT`)
+    } catch { /* 字段已存在 */ }
+    try {
+      this.db.exec(`ALTER TABLE characters ADD COLUMN relationships TEXT DEFAULT '[]'`)
+    } catch { /* 字段已存在 */ }
+
+    // 设置表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )
+    `)
+
+    // 创建索引
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_volumes_project ON volumes(project_id);
+      CREATE INDEX IF NOT EXISTS idx_chapters_volume ON chapters(volume_id);
+      CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+    `)
+  }
+
+  // ==================== 项目操作 ====================
+
+  getProjects(): any[] {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM projects ORDER BY updated_at DESC
+    `)
+    return stmt.all().map(this.parseProjectRow)
+  }
+
+  getProject(id: string): any | null {
+    const stmt = this.db!.prepare('SELECT * FROM projects WHERE id = ?')
+    const row = stmt.get(id)
+    return row ? this.parseProjectRow(row) : null
+  }
+
+  createProject(data: any): any {
+    const id = uuidv4()
+    const now = new Date().toISOString()
+
+    const stmt = this.db!.prepare(`
+      INSERT INTO projects (id, title, inspiration, constraints, scale, genres, styles, world_setting, summary, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      id,
+      data.title || '未命名作品',
+      data.inspiration || '',
+      data.constraints || '',
+      data.scale || 'million',
+      JSON.stringify(data.genres || []),
+      JSON.stringify(data.styles || []),
+      data.worldSetting || '',
+      data.summary || '',
+      now,
+      now
+    )
+
+    return this.getProject(id)
+  }
+
+  updateProject(id: string, data: any): any {
+    const now = new Date().toISOString()
+    const updates: string[] = []
+    const values: any[] = []
+
+    const fieldMap: Record<string, string> = {
+      title: 'title',
+      inspiration: 'inspiration',
+      constraints: 'constraints',
+      scale: 'scale',
+      genres: 'genres',
+      styles: 'styles',
+      worldSetting: 'world_setting',
+      summary: 'summary'
+    }
+
+    for (const [key, column] of Object.entries(fieldMap)) {
+      if (data[key] !== undefined) {
+        updates.push(`${column} = ?`)
+        if (key === 'genres' || key === 'styles') {
+          values.push(JSON.stringify(data[key]))
+        } else {
+          values.push(data[key])
+        }
+      }
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?')
+      values.push(now, id)
+
+      const stmt = this.db!.prepare(`
+        UPDATE projects SET ${updates.join(', ')} WHERE id = ?
+      `)
+      stmt.run(...values)
+    }
+
+    return this.getProject(id)
+  }
+
+  deleteProject(id: string): void {
+    const stmt = this.db!.prepare('DELETE FROM projects WHERE id = ?')
+    stmt.run(id)
+  }
+
+  private parseProjectRow(row: any): any {
+    return {
+      id: row.id,
+      title: row.title,
+      inspiration: row.inspiration,
+      constraints: row.constraints,
+      scale: row.scale,
+      genres: JSON.parse(row.genres || '[]'),
+      styles: JSON.parse(row.styles || '[]'),
+      worldSetting: row.world_setting,
+      summary: row.summary,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      syncedAt: row.synced_at
+    }
+  }
+
+  // ==================== 卷操作 ====================
+
+  getVolumes(projectId: string): any[] {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM volumes WHERE project_id = ? ORDER BY sort_order ASC
+    `)
+    return stmt.all(projectId).map(this.parseVolumeRow)
+  }
+
+  createVolume(data: any): any {
+    const id = uuidv4()
+    const now = new Date().toISOString()
+
+    // 获取当前最大排序值
+    const maxOrder = this.db!.prepare(
+      'SELECT MAX(sort_order) as max FROM volumes WHERE project_id = ?'
+    ).get(data.projectId) as any
+    const sortOrder = (maxOrder?.max || 0) + 1
+
+    const stmt = this.db!.prepare(`
+      INSERT INTO volumes (id, project_id, title, summary, sort_order, key_points, brief_chapters, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      id,
+      data.projectId,
+      data.title || '第一卷',
+      data.summary || '',
+      sortOrder,
+      JSON.stringify(data.keyPoints || []),
+      JSON.stringify(data.briefChapters || []),
+      now,
+      now
+    )
+
+    return this.getVolume(id)
+  }
+
+  getVolume(id: string): any | null {
+    const stmt = this.db!.prepare('SELECT * FROM volumes WHERE id = ?')
+    const row = stmt.get(id)
+    return row ? this.parseVolumeRow(row) : null
+  }
+
+  updateVolume(id: string, data: any): any {
+    const now = new Date().toISOString()
+    const updates: string[] = []
+    const values: any[] = []
+
+    if (data.title !== undefined) {
+      updates.push('title = ?')
+      values.push(data.title)
+    }
+    if (data.summary !== undefined) {
+      updates.push('summary = ?')
+      values.push(data.summary)
+    }
+    if (data.order !== undefined) {
+      updates.push('sort_order = ?')
+      values.push(data.order)
+    }
+    if (data.keyPoints !== undefined) {
+      updates.push('key_points = ?')
+      values.push(JSON.stringify(data.keyPoints))
+    }
+    if (data.briefChapters !== undefined) {
+      updates.push('brief_chapters = ?')
+      values.push(JSON.stringify(data.briefChapters))
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?')
+      values.push(now, id)
+
+      const stmt = this.db!.prepare(`
+        UPDATE volumes SET ${updates.join(', ')} WHERE id = ?
+      `)
+      stmt.run(...values)
+    }
+
+    return this.getVolume(id)
+  }
+
+  deleteVolume(id: string): void {
+    const stmt = this.db!.prepare('DELETE FROM volumes WHERE id = ?')
+    stmt.run(id)
+  }
+
+  private parseVolumeRow(row: any): any {
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      title: row.title,
+      summary: row.summary,
+      order: row.sort_order,
+      keyPoints: row.key_points ? JSON.parse(row.key_points) : [],
+      briefChapters: row.brief_chapters ? JSON.parse(row.brief_chapters) : [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  }
+
+  // ==================== 章节操作 ====================
+
+  getChapters(volumeId: string): any[] {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM chapters WHERE volume_id = ? ORDER BY sort_order ASC
+    `)
+    return stmt.all(volumeId).map(this.parseChapterRow)
+  }
+
+  getChapter(id: string): any | null {
+    const stmt = this.db!.prepare('SELECT * FROM chapters WHERE id = ?')
+    const row = stmt.get(id)
+    return row ? this.parseChapterRow(row) : null
+  }
+
+  createChapter(data: any): any {
+    const id = uuidv4()
+    const now = new Date().toISOString()
+
+    const maxOrder = this.db!.prepare(
+      'SELECT MAX(sort_order) as max FROM chapters WHERE volume_id = ?'
+    ).get(data.volumeId) as any
+    const sortOrder = (maxOrder?.max || 0) + 1
+
+    const stmt = this.db!.prepare(`
+      INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const content = data.content || ''
+    const wordCount = content.replace(/\s/g, '').length
+
+    stmt.run(
+      id,
+      data.volumeId,
+      data.title || '第一章',
+      data.outline || '',
+      content,
+      wordCount,
+      sortOrder,
+      now,
+      now
+    )
+
+    return this.getChapter(id)
+  }
+
+  updateChapter(id: string, data: any): any {
+    const now = new Date().toISOString()
+    const updates: string[] = []
+    const values: any[] = []
+
+    if (data.title !== undefined) {
+      updates.push('title = ?')
+      values.push(data.title)
+    }
+    if (data.outline !== undefined) {
+      updates.push('outline = ?')
+      values.push(data.outline)
+    }
+    if (data.content !== undefined) {
+      updates.push('content = ?')
+      values.push(data.content)
+      updates.push('word_count = ?')
+      values.push(data.content.replace(/\s/g, '').length)
+    }
+    if (data.order !== undefined) {
+      updates.push('sort_order = ?')
+      values.push(data.order)
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?')
+      values.push(now, id)
+
+      const stmt = this.db!.prepare(`
+        UPDATE chapters SET ${updates.join(', ')} WHERE id = ?
+      `)
+      stmt.run(...values)
+    }
+
+    return this.getChapter(id)
+  }
+
+  deleteChapter(id: string): void {
+    const stmt = this.db!.prepare('DELETE FROM chapters WHERE id = ?')
+    stmt.run(id)
+  }
+
+  private parseChapterRow(row: any): any {
+    return {
+      id: row.id,
+      volumeId: row.volume_id,
+      title: row.title,
+      outline: row.outline,
+      content: row.content,
+      wordCount: row.word_count,
+      order: row.sort_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  }
+
+  // ==================== 角色操作 ====================
+
+  getCharacters(projectId: string): any[] {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM characters WHERE project_id = ? ORDER BY created_at DESC
+    `)
+    return stmt.all(projectId).map(this.parseCharacterRow)
+  }
+
+  getCharacter(id: string): any | null {
+    const stmt = this.db!.prepare('SELECT * FROM characters WHERE id = ?')
+    const row = stmt.get(id)
+    return row ? this.parseCharacterRow(row) : null
+  }
+
+  createCharacter(data: any): any {
+    const id = uuidv4()
+    const now = new Date().toISOString()
+
+    const stmt = this.db!.prepare(`
+      INSERT INTO characters (id, project_id, name, role, gender, age, identity, description, arc, status, death_chapter, appearances, relationships, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      id,
+      data.projectId,
+      data.name || '未命名角色',
+      data.role || 'supporting',
+      data.gender || '',
+      data.age || '',
+      data.identity || '',
+      data.description || '',
+      data.arc || '',
+      data.status || 'pending',
+      data.deathChapter || '',
+      JSON.stringify(data.appearances || []),
+      JSON.stringify(data.relationships || []),
+      now,
+      now
+    )
+
+    return this.getCharacter(id)
+  }
+
+  updateCharacter(id: string, data: any): any {
+    const now = new Date().toISOString()
+    const updates: string[] = []
+    const values: any[] = []
+
+    const fields = ['name', 'role', 'gender', 'age', 'identity', 'description', 'arc', 'status']
+    for (const field of fields) {
+      if (data[field] !== undefined) {
+        updates.push(`${field} = ?`)
+        values.push(data[field])
+      }
+    }
+
+    if (data.deathChapter !== undefined) {
+      updates.push('death_chapter = ?')
+      values.push(data.deathChapter)
+    }
+
+    if (data.appearances !== undefined) {
+      updates.push('appearances = ?')
+      values.push(JSON.stringify(data.appearances))
+    }
+
+    if (data.relationships !== undefined) {
+      updates.push('relationships = ?')
+      values.push(JSON.stringify(data.relationships))
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?')
+      values.push(now, id)
+
+      const stmt = this.db!.prepare(`
+        UPDATE characters SET ${updates.join(', ')} WHERE id = ?
+      `)
+      stmt.run(...values)
+    }
+
+    return this.getCharacter(id)
+  }
+
+  deleteCharacter(id: string): void {
+    const stmt = this.db!.prepare('DELETE FROM characters WHERE id = ?')
+    stmt.run(id)
+  }
+
+  private parseCharacterRow(row: any): any {
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      name: row.name,
+      role: row.role,
+      gender: row.gender,
+      age: row.age,
+      identity: row.identity,
+      description: row.description,
+      arc: row.arc,
+      status: row.status,
+      deathChapter: row.death_chapter || '',
+      appearances: JSON.parse(row.appearances || '[]'),
+      relationships: JSON.parse(row.relationships || '[]'),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  }
+
+  // ==================== 设置操作 ====================
+
+  getSetting(key: string): any {
+    const stmt = this.db!.prepare('SELECT value FROM settings WHERE key = ?')
+    const row = stmt.get(key) as any
+    return row ? JSON.parse(row.value) : null
+  }
+
+  setSetting(key: string, value: any): void {
+    const stmt = this.db!.prepare(`
+      INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+    `)
+    stmt.run(key, JSON.stringify(value))
+  }
+
+  getAllSettings(): Record<string, any> {
+    const stmt = this.db!.prepare('SELECT * FROM settings')
+    const rows = stmt.all() as any[]
+    const settings: Record<string, any> = {}
+    for (const row of rows) {
+      settings[row.key] = JSON.parse(row.value)
+    }
+    return settings
+  }
+
+  // ==================== 导出数据 ====================
+
+  exportProjectData(projectId: string): any {
+    const project = this.getProject(projectId)
+    if (!project) return null
+
+    const volumes = this.getVolumes(projectId)
+    const chapters: any[] = []
+    for (const volume of volumes) {
+      const volumeChapters = this.getChapters(volume.id)
+      chapters.push(...volumeChapters)
+    }
+    const characters = this.getCharacters(projectId)
+
+    return {
+      project,
+      volumes,
+      chapters,
+      characters,
+      exportedAt: new Date().toISOString()
+    }
+  }
+
+  /**
+   * 导入项目数据
+   * @param data 包含 project, volumes, chapters, characters 的完整数据
+   * @param options 导入选项
+   * @returns 导入的项目ID
+   */
+  importProjectData(
+    data: any,
+    options: {
+      overwrite?: boolean // 如果项目已存在，是否覆盖
+      generateNewIds?: boolean // 是否生成新的ID（避免冲突）
+    } = {}
+  ): { success: boolean; projectId?: string; error?: string } {
+    const { overwrite = false, generateNewIds = true } = options
+
+    try {
+      if (!data.project) {
+        return { success: false, error: '缺少项目数据' }
+      }
+
+      const now = new Date().toISOString()
+
+      // ID 映射表（用于关联关系）
+      const idMap = {
+        project: data.project.id,
+        volumes: new Map<string, string>(),
+        chapters: new Map<string, string>()
+      }
+
+      // 1. 检查项目是否已存在
+      const existingProject = this.getProject(data.project.id)
+      if (existingProject && !overwrite && !generateNewIds) {
+        return { success: false, error: '项目已存在，使用不同的导入选项' }
+      }
+
+      // 2. 导入项目
+      let projectId: string
+      if (existingProject && overwrite) {
+        // 覆盖模式：删除旧数据
+        this.deleteProject(data.project.id)
+        projectId = data.project.id
+      } else if (generateNewIds) {
+        // 生成新ID模式
+        projectId = uuidv4()
+        idMap.project = projectId
+      } else {
+        projectId = data.project.id
+      }
+
+      // 创建项目
+      const stmt = this.db!.prepare(`
+        INSERT INTO projects (id, title, inspiration, constraints, scale, genres, styles, world_setting, summary, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+
+      stmt.run(
+        projectId,
+        data.project.title || '未命名作品',
+        data.project.inspiration || '',
+        data.project.constraints || '',
+        data.project.scale || 'million',
+        JSON.stringify(data.project.genres || []),
+        JSON.stringify(data.project.styles || []),
+        data.project.worldSetting || '',
+        data.project.summary || '',
+        data.project.createdAt || now,
+        now
+      )
+
+      // 3. 导入卷
+      if (data.volumes && Array.isArray(data.volumes)) {
+        for (const volume of data.volumes) {
+          const volumeId = generateNewIds ? uuidv4() : volume.id
+          idMap.volumes.set(volume.id, volumeId)
+
+          const volumeStmt = this.db!.prepare(`
+            INSERT INTO volumes (id, project_id, title, summary, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `)
+
+          volumeStmt.run(
+            volumeId,
+            projectId,
+            volume.title || '第一卷',
+            volume.summary || '',
+            volume.order || 0,
+            volume.createdAt || now,
+            now
+          )
+        }
+      }
+
+      // 4. 导入章节
+      if (data.chapters && Array.isArray(data.chapters)) {
+        for (const chapter of data.chapters) {
+          const chapterId = generateNewIds ? uuidv4() : chapter.id
+          const volumeId = idMap.volumes.get(chapter.volumeId) || chapter.volumeId
+
+          idMap.chapters.set(chapter.id, chapterId)
+
+          const content = chapter.content || ''
+          const wordCount = content.replace(/\s/g, '').length
+
+          const chapterStmt = this.db!.prepare(`
+            INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `)
+
+          chapterStmt.run(
+            chapterId,
+            volumeId,
+            chapter.title || '未命名',
+            chapter.outline || '',
+            content,
+            wordCount,
+            chapter.order || 0,
+            chapter.createdAt || now,
+            now
+          )
+        }
+      }
+
+      // 5. 导入角色
+      if (data.characters && Array.isArray(data.characters)) {
+        for (const char of data.characters) {
+          const charId = generateNewIds ? uuidv4() : char.id
+
+          // 更新 appearances 中的章节ID引用
+          let appearances = char.appearances || []
+          if (generateNewIds && Array.isArray(appearances)) {
+            appearances = appearances.map((chapterId: string) =>
+              idMap.chapters.get(chapterId) || chapterId
+            )
+          }
+
+          const charStmt = this.db!.prepare(`
+            INSERT INTO characters (id, project_id, name, role, gender, age, identity, description, arc, status, death_chapter, appearances, relationships, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `)
+
+          charStmt.run(
+            charId,
+            projectId,
+            char.name || '未命名角色',
+            char.role || 'supporting',
+            char.gender || '',
+            char.age || '',
+            char.identity || '',
+            char.description || '',
+            char.arc || '',
+            char.status || 'pending',
+            char.deathChapter || '',
+            JSON.stringify(appearances),
+            JSON.stringify(char.relationships || []),
+            char.createdAt || now,
+            now
+          )
+        }
+      }
+
+      return { success: true, projectId }
+
+    } catch (error: any) {
+      console.error('Import error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * 关闭数据库连接
+   */
+  close(): void {
+    if (this.db) {
+      this.db.close()
+      this.db = null
+    }
+  }
+
+  // ==================== 同步辅助方法 ====================
+
+  /**
+   * 创建或更新项目（用于同步）
+   * 保留原有ID
+   */
+  createOrUpdateProject(data: any): any {
+    const existing = this.getProject(data.id)
+    if (existing) {
+      return this.updateProject(data.id, data)
+    }
+
+    const now = new Date().toISOString()
+    const stmt = this.db!.prepare(`
+      INSERT INTO projects (id, title, inspiration, constraints, scale, genres, styles, world_setting, summary, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      data.id,
+      data.title || '未命名作品',
+      data.inspiration || '',
+      data.constraints || '',
+      data.scale || 'million',
+      JSON.stringify(data.genres || []),
+      JSON.stringify(data.styles || []),
+      data.worldSetting || '',
+      data.summary || '',
+      data.createdAt || now,
+      data.updatedAt || now
+    )
+
+    return this.getProject(data.id)
+  }
+
+  /**
+   * 创建或更新卷（用于同步）
+   * 保留原有ID
+   */
+  createOrUpdateVolume(data: any): any {
+    const existing = this.getVolume(data.id)
+    if (existing) {
+      return this.updateVolume(data.id, data)
+    }
+
+    const now = new Date().toISOString()
+    const stmt = this.db!.prepare(`
+      INSERT INTO volumes (id, project_id, title, summary, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      data.id,
+      data.projectId,
+      data.title || '第一卷',
+      data.summary || '',
+      data.order || 0,
+      data.createdAt || now,
+      data.updatedAt || now
+    )
+
+    return this.getVolume(data.id)
+  }
+
+  /**
+   * 创建或更新章节（用于同步）
+   * 保留原有ID
+   */
+  createOrUpdateChapter(data: any): any {
+    const existing = this.getChapter(data.id)
+    if (existing) {
+      return this.updateChapter(data.id, data)
+    }
+
+    const now = new Date().toISOString()
+    const content = data.content || ''
+    const wordCount = content.replace(/\s/g, '').length
+
+    const stmt = this.db!.prepare(`
+      INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      data.id,
+      data.volumeId,
+      data.title || '第一章',
+      data.outline || '',
+      content,
+      wordCount,
+      data.order || 0,
+      data.createdAt || now,
+      data.updatedAt || now
+    )
+
+    return this.getChapter(data.id)
+  }
+
+  /**
+   * 创建或更新角色（用于同步）
+   * 保留原有ID
+   */
+  createOrUpdateCharacter(data: any): any {
+    const existing = this.getCharacter(data.id)
+    if (existing) {
+      return this.updateCharacter(data.id, data)
+    }
+
+    const now = new Date().toISOString()
+    const stmt = this.db!.prepare(`
+      INSERT INTO characters (id, project_id, name, role, gender, age, identity, description, arc, status, death_chapter, appearances, relationships, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      data.id,
+      data.projectId,
+      data.name || '未命名角色',
+      data.role || 'supporting',
+      data.gender || '',
+      data.age || '',
+      data.identity || '',
+      data.description || '',
+      data.arc || '',
+      data.status || 'pending',
+      data.deathChapter || '',
+      JSON.stringify(data.appearances || []),
+      JSON.stringify(data.relationships || []),
+      data.createdAt || now,
+      data.updatedAt || now
+    )
+
+    return this.getCharacter(data.id)
+  }
+}
