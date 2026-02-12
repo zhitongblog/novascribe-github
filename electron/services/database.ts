@@ -70,6 +70,10 @@ export class DatabaseService {
     try {
       this.db.exec(`ALTER TABLE volumes ADD COLUMN brief_chapters TEXT DEFAULT '[]'`)
     } catch { /* 字段已存在 */ }
+    // 迁移：添加生成锁字段（防止重复生成）
+    try {
+      this.db.exec(`ALTER TABLE volumes ADD COLUMN generating_lock INTEGER DEFAULT 0`)
+    } catch { /* 字段已存在 */ }
 
     // 章节表
     this.db.exec(`
@@ -325,6 +329,73 @@ export class DatabaseService {
     stmt.run(id)
   }
 
+  /**
+   * 尝试设置生成锁
+   * @returns true 如果成功获取锁，false 如果锁已被占用
+   */
+  trySetGeneratingLock(volumeId: string): { success: boolean; lockedAt?: number; lockedMinutesAgo?: number } {
+    const now = Date.now()
+    const fiveMinutesAgo = now - 5 * 60 * 1000 // 5分钟超时
+
+    // 先检查是否有有效的锁
+    const checkStmt = this.db!.prepare(`
+      SELECT generating_lock FROM volumes WHERE id = ?
+    `)
+    const row: any = checkStmt.get(volumeId)
+
+    if (row && row.generating_lock > fiveMinutesAgo) {
+      // 锁仍然有效（5分钟内）
+      const minutesAgo = Math.floor((now - row.generating_lock) / (60 * 1000))
+      return {
+        success: false,
+        lockedAt: row.generating_lock,
+        lockedMinutesAgo: minutesAgo
+      }
+    }
+
+    // 锁已过期或不存在，设置新锁
+    const updateStmt = this.db!.prepare(`
+      UPDATE volumes SET generating_lock = ? WHERE id = ?
+    `)
+    updateStmt.run(now, volumeId)
+
+    return { success: true }
+  }
+
+  /**
+   * 清除生成锁
+   */
+  clearGeneratingLock(volumeId: string): void {
+    const stmt = this.db!.prepare(`
+      UPDATE volumes SET generating_lock = 0 WHERE id = ?
+    `)
+    stmt.run(volumeId)
+  }
+
+  /**
+   * 检查是否有生成锁
+   */
+  checkGeneratingLock(volumeId: string): { isLocked: boolean; lockedAt?: number; lockedMinutesAgo?: number } {
+    const now = Date.now()
+    const fiveMinutesAgo = now - 5 * 60 * 1000
+
+    const stmt = this.db!.prepare(`
+      SELECT generating_lock FROM volumes WHERE id = ?
+    `)
+    const row: any = stmt.get(volumeId)
+
+    if (row && row.generating_lock > fiveMinutesAgo) {
+      const minutesAgo = Math.floor((now - row.generating_lock) / (60 * 1000))
+      return {
+        isLocked: true,
+        lockedAt: row.generating_lock,
+        lockedMinutesAgo: minutesAgo
+      }
+    }
+
+    return { isLocked: false }
+  }
+
   private parseVolumeRow(row: any): any {
     return {
       id: row.id,
@@ -334,6 +405,7 @@ export class DatabaseService {
       order: row.sort_order,
       keyPoints: row.key_points ? JSON.parse(row.key_points) : [],
       briefChapters: row.brief_chapters ? JSON.parse(row.brief_chapters) : [],
+      generatingLock: row.generating_lock || 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }

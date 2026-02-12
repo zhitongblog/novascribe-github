@@ -176,6 +176,18 @@ export function setupIpcHandlers(ipcMain: IpcMain, services: Services) {
     database.deleteVolume(id)
   })
 
+  ipcMain.handle('db:trySetGeneratingLock', (_, volumeId) => {
+    return database.trySetGeneratingLock(volumeId)
+  })
+
+  ipcMain.handle('db:clearGeneratingLock', (_, volumeId) => {
+    database.clearGeneratingLock(volumeId)
+  })
+
+  ipcMain.handle('db:checkGeneratingLock', (_, volumeId) => {
+    return database.checkGeneratingLock(volumeId)
+  })
+
   // ==================== 数据库 - 章节 ====================
 
   ipcMain.handle('db:getChapters', (_, volumeId) => {

@@ -75,6 +75,9 @@ export interface ElectronAPI {
     createVolume: (volume: any) => Promise<any>
     updateVolume: (id: string, data: any) => Promise<any>
     deleteVolume: (id: string) => Promise<void>
+    trySetGeneratingLock: (volumeId: string) => Promise<{ success: boolean; lockedAt?: number; lockedMinutesAgo?: number }>
+    clearGeneratingLock: (volumeId: string) => Promise<void>
+    checkGeneratingLock: (volumeId: string) => Promise<{ isLocked: boolean; lockedAt?: number; lockedMinutesAgo?: number }>
 
     // 章节
     getChapters: (volumeId: string) => Promise<any[]>
@@ -171,6 +174,9 @@ const electronAPI: ElectronAPI = {
     createVolume: (volume) => ipcRenderer.invoke('db:createVolume', volume),
     updateVolume: (id, data) => ipcRenderer.invoke('db:updateVolume', id, data),
     deleteVolume: (id) => ipcRenderer.invoke('db:deleteVolume', id),
+    trySetGeneratingLock: (volumeId) => ipcRenderer.invoke('db:trySetGeneratingLock', volumeId),
+    clearGeneratingLock: (volumeId) => ipcRenderer.invoke('db:clearGeneratingLock', volumeId),
+    checkGeneratingLock: (volumeId) => ipcRenderer.invoke('db:checkGeneratingLock', volumeId),
 
     getChapters: (volumeId) => ipcRenderer.invoke('db:getChapters', volumeId),
     getChapter: (id) => ipcRenderer.invoke('db:getChapter', id),

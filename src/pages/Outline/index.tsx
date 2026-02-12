@@ -68,7 +68,7 @@ function Outline() {
   const [generateChapterCount, setGenerateChapterCount] = useState(40)
   const [showGenerateModal, setShowGenerateModal] = useState<string | null>(null)
   const [generateGuidance, setGenerateGuidance] = useState('')
-  const [generateMode, setGenerateMode] = useState<'batch' | 'oneByOne'>('oneByOne')
+  const [generateMode, setGenerateMode] = useState<'batch' | 'oneByOne'>('batch')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [useCompression, setUseCompression] = useState(true)  // 默认启用压缩
   const [isExtractingKeyPoints, setIsExtractingKeyPoints] = useState(false)
@@ -285,65 +285,46 @@ function Outline() {
     console.log(`📦 卷信息: ${volume.title}`)
     console.log(`🔄 模式: ${shouldDelete ? '清空重新生成' : '追加生成'}`)
 
-    // 设置生成锁
-    setGeneratingVolumeId(volumeId)
-    setGeneratingProgress(10)
-
     try {
-      // 🔒 重新加载章节列表，获取数据库最新状态（防止页面刷新后状态丢失）
+      // 🔒 数据库级别的锁检查（防止并发生成）
+      console.log('🔒 [大纲生成] 尝试获取数据库锁...')
+      const lockResult = await window.electron.db.trySetGeneratingLock(volumeId)
+
+      if (!lockResult.success) {
+        // 锁已被占用，说明正在生成中
+        const minutesAgo = lockResult.lockedMinutesAgo || 0
+        console.error(`❌ [大纲生成] 该卷正在生成中（${minutesAgo} 分钟前开始）`)
+
+        message.error({
+          content: (
+            <div>
+              <div>⚠️ 该卷正在生成中，请稍候</div>
+              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
+                生成操作已在 {minutesAgo} 分钟前启动，请等待其完成后再试。
+                如果长时间未完成，锁会在 5 分钟后自动释放。
+              </div>
+            </div>
+          ),
+          duration: 6
+        })
+        return
+      }
+
+      console.log('✅ [大纲生成] 成功获取数据库锁')
+
+      // 设置前端锁（用于UI状态）
+      setGeneratingVolumeId(volumeId)
+      setGeneratingProgress(10)
+
+      // 重新加载章节列表，获取数据库最新状态
       console.log('🔄 [大纲生成] 重新加载章节列表以获取最新状态...')
       await loadAllChapters(currentProject.id)
-
-      // 等待状态更新
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      // 重新获取最新的章节列表（从更新后的状态中）
+      // 重新获取最新的章节列表
       const latestChapters = await window.electron.db.getChapters(volumeId)
       const existingChapters = latestChapters.sort((a: any, b: any) => a.order - b.order)
       console.log(`📊 [大纲生成] 数据库中现有章节数: ${existingChapters.length}`)
-
-      // 🛡️ 检测最近生成的章节（防止重复生成）
-      if (!shouldDelete && existingChapters.length > 0) {
-        const now = Date.now()
-        const recentChapters = existingChapters.filter((ch: any) => {
-          const createdAt = new Date(ch.createdAt).getTime()
-          const ageInMinutes = (now - createdAt) / (1000 * 60)
-          return ageInMinutes < 10  // 10分钟内创建的章节
-        })
-
-        if (recentChapters.length > 0) {
-          console.warn(`⚠️ [大纲生成] 检测到 ${recentChapters.length} 个最近生成的章节`)
-
-          // 如果最近生成的章节数接近要生成的数量，可能是重复生成
-          if (recentChapters.length >= generateChapterCount * 0.8) {
-            const shouldContinue = await new Promise<boolean>((resolve) => {
-              Modal.confirm({
-                title: '⚠️ 检测到可能的重复生成',
-                content: (
-                  <div>
-                    <p>该卷在最近 10 分钟内已生成了 {recentChapters.length} 个章节。</p>
-                    <p>当前章节总数：{existingChapters.length}</p>
-                    <p>继续追加生成会新增 {generateChapterCount} 章。</p>
-                    <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-                      <strong>如果你刚才已经点击过生成，请选择"取消"以避免重复生成。</strong>
-                    </p>
-                  </div>
-                ),
-                okText: '确认继续生成',
-                cancelText: '取消',
-                okType: 'danger',
-                onOk: () => resolve(true),
-                onCancel: () => resolve(false)
-              })
-            })
-
-            if (!shouldContinue) {
-              console.log('❌ [大纲生成] 用户取消生成')
-              return
-            }
-          }
-        }
-      }
 
       // 如果是清空重新生成模式，先删除旧章节
       if (shouldDelete) {
@@ -369,7 +350,7 @@ function Outline() {
         const prevChapters = chapters
           .filter(c => c.volumeId === previousVolume.id)
           .sort((a, b) => a.order - b.order)
-          .slice(-5) // 只取最后5章
+          // 🔥 修改：获取所有章节，而不是只有最后5章
         previousVolumeChapters = prevChapters.map(c =>
           `${c.title}: ${c.outline || '(无大纲)'}`
         )
@@ -626,6 +607,15 @@ function Outline() {
         })
       }
     } finally {
+      // 清除数据库锁
+      try {
+        await window.electron.db.clearGeneratingLock(volumeId)
+        console.log('🔓 [大纲生成] 已清除数据库锁')
+      } catch (unlockError) {
+        console.error('⚠️ [大纲生成] 清除锁失败:', unlockError)
+      }
+
+      // 清除前端锁
       setGeneratingVolumeId(null)
       setGeneratingProgress(0)
     }
@@ -1130,8 +1120,8 @@ function Outline() {
             </Radio.Group>
             <p className="text-dark-muted text-xs mt-1">
               {generateMode === 'oneByOne'
-                ? '每章单独调用AI，上下文精简，节约约60%token'
-                : '一次生成全部章节，上下文完整，token消耗较多'}
+                ? '逐章生成，节约token，但可能出现内容冲突'
+                : '🔥 推荐：一次性生成所有章节，分析全书结构，避免内容冲突和重复'}
             </p>
           </div>
 
