@@ -285,15 +285,69 @@ function Outline() {
     console.log(`📦 卷信息: ${volume.title}`)
     console.log(`🔄 模式: ${shouldDelete ? '清空重新生成' : '追加生成'}`)
 
+    // 设置生成锁
     setGeneratingVolumeId(volumeId)
     setGeneratingProgress(10)
 
     try {
-      const existingChapters = chapters.filter(c => c.volumeId === volumeId).sort((a, b) => a.order - b.order)
-      console.log(`📊 现有章节数: ${existingChapters.length}`)
+      // 🔒 重新加载章节列表，获取数据库最新状态（防止页面刷新后状态丢失）
+      console.log('🔄 [大纲生成] 重新加载章节列表以获取最新状态...')
+      await loadAllChapters(currentProject.id)
+
+      // 等待状态更新
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // 重新获取最新的章节列表（从更新后的状态中）
+      const latestChapters = await window.electron.db.getChapters(volumeId)
+      const existingChapters = latestChapters.sort((a: any, b: any) => a.order - b.order)
+      console.log(`📊 [大纲生成] 数据库中现有章节数: ${existingChapters.length}`)
+
+      // 🛡️ 检测最近生成的章节（防止重复生成）
+      if (!shouldDelete && existingChapters.length > 0) {
+        const now = Date.now()
+        const recentChapters = existingChapters.filter((ch: any) => {
+          const createdAt = new Date(ch.createdAt).getTime()
+          const ageInMinutes = (now - createdAt) / (1000 * 60)
+          return ageInMinutes < 10  // 10分钟内创建的章节
+        })
+
+        if (recentChapters.length > 0) {
+          console.warn(`⚠️ [大纲生成] 检测到 ${recentChapters.length} 个最近生成的章节`)
+
+          // 如果最近生成的章节数接近要生成的数量，可能是重复生成
+          if (recentChapters.length >= generateChapterCount * 0.8) {
+            const shouldContinue = await new Promise<boolean>((resolve) => {
+              Modal.confirm({
+                title: '⚠️ 检测到可能的重复生成',
+                content: (
+                  <div>
+                    <p>该卷在最近 10 分钟内已生成了 {recentChapters.length} 个章节。</p>
+                    <p>当前章节总数：{existingChapters.length}</p>
+                    <p>继续追加生成会新增 {generateChapterCount} 章。</p>
+                    <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+                      <strong>如果你刚才已经点击过生成，请选择"取消"以避免重复生成。</strong>
+                    </p>
+                  </div>
+                ),
+                okText: '确认继续生成',
+                cancelText: '取消',
+                okType: 'danger',
+                onOk: () => resolve(true),
+                onCancel: () => resolve(false)
+              })
+            })
+
+            if (!shouldContinue) {
+              console.log('❌ [大纲生成] 用户取消生成')
+              return
+            }
+          }
+        }
+      }
 
       // 如果是清空重新生成模式，先删除旧章节
       if (shouldDelete) {
+        console.log(`🗑️ [大纲生成] 清空模式：删除 ${existingChapters.length} 个现有章节`)
         for (const ch of existingChapters) {
           await deleteChapter(ch.id)
         }
