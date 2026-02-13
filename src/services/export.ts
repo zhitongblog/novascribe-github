@@ -42,12 +42,12 @@ function buildChapterTitle(title: string, order: number): string {
  * 导出单个卷的所有章节为 ZIP
  * @param volumeTitle 卷标题
  * @param chapters 章节数据（需要包含全书编号信息）
- * @param startGlobalChapterNumber 该卷起始的全书章节编号（可选，如果不提供则使用chapter.order）
+ * @param startGlobalChapterNumber 该卷起始的全书章节编号（必须提供，用于统一文件名格式）
  */
 export async function exportVolumeAsZip(
   volumeTitle: string,
   chapters: ChapterData[],
-  startGlobalChapterNumber?: number
+  startGlobalChapterNumber: number
 ): Promise<void> {
   if (chapters.length === 0) {
     throw new Error('该卷没有章节可导出')
@@ -63,16 +63,13 @@ export async function exportVolumeAsZip(
       continue // 跳过空章节
     }
 
-    // 使用全书编号（如果提供）或卷内编号
-    const globalNum = startGlobalChapterNumber !== undefined
-      ? startGlobalChapterNumber + chapterIndex
-      : chapter.order
-
+    // 使用全书编号
+    const globalNum = startGlobalChapterNumber + chapterIndex
     const chapterTitle = buildChapterTitle(chapter.title, globalNum)
     const fileName = sanitizeFileName(`${chapterTitle}.txt`)
 
-    // 格式化内容为 TXT（包含章节标题）
-    const content = `${chapterTitle}\n\n${formatToTxt(chapter.content)}`
+    // 格式化内容为 TXT（不包含章节标题，只有正文）
+    const content = formatToTxt(chapter.content)
 
     zip.file(fileName, content)
     chapterIndex++
@@ -119,8 +116,8 @@ export async function exportBookAsZip(
       const chapterTitle = buildChapterTitle(chapter.title, globalChapterNum)
       const fileName = sanitizeFileName(`${chapterTitle}.txt`)
 
-      // 格式化内容为 TXT（包含章节标题）
-      const content = `${chapterTitle}\n\n${formatToTxt(chapter.content)}`
+      // 格式化内容为 TXT（不包含章节标题，只有正文）
+      const content = formatToTxt(chapter.content)
 
       zip.file(`${volumeFolder}/${fileName}`, content)
       hasContent = true
@@ -164,8 +161,8 @@ export async function exportBookAsFlatZip(
       const chapterTitle = buildChapterTitle(chapter.title, globalChapterNum)
       const fileName = sanitizeFileName(`${chapterTitle}.txt`)
 
-      // 格式化内容为 TXT（包含章节标题）
-      const content = `${chapterTitle}\n\n${formatToTxt(chapter.content)}`
+      // 格式化内容为 TXT（不包含章节标题，只有正文）
+      const content = formatToTxt(chapter.content)
 
       zip.file(fileName, content)
       hasContent = true
