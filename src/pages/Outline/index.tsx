@@ -732,15 +732,14 @@ function Outline() {
       // 为每个有内容的章节创建 txt 文件
       volumeChapters.forEach((chapter) => {
         if (chapter.content && chapter.content.trim()) {
-          // 文件名格式：001_第1章 标题.txt
+          // 文件名格式：第X章 标题.txt（使用全书章节编号）
           const globalChapterNum = getGlobalChapterNumber(chapter)
-          const chapterNum = String(globalChapterNum).padStart(3, '0')
           const cleanTitle = cleanChapterTitle(chapter.title)
           const chapterTitle = `第${globalChapterNum}章 ${cleanTitle}`
-          const fileName = `${chapterNum}_${chapterTitle.replace(/[\\/:*?"<>|]/g, '_')}.txt`
+          const fileName = `${chapterTitle.replace(/[\\/:*?"<>|]/g, '_')}.txt`
 
-          // 文件内容：章节标题 + 换行 + 正文
-          const content = `${chapterTitle}\n\n${chapter.content}`
+          // 文件内容：只有正文，不包含章节标题
+          const content = chapter.content
           zip.file(fileName, content)
         }
       })
