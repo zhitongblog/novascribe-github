@@ -645,8 +645,6 @@ function Outline() {
       chaptersBeforeCurrentVolume += volChapters.length
     }
 
-    const existingChapters = chapters.filter((c) => c.volumeId === volumeId)
-
     await createChapter({
       volumeId,
       title: '未命名',

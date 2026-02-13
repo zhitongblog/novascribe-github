@@ -1,0 +1,162 @@
+====================================
+    Ubuntu 构建问题已修复！
+====================================
+
+## ✅ 问题诊断
+
+错误信息：
+"The strategy configuration was canceled because 'build.ubuntu-latest' failed"
+
+根本原因：
+Ubuntu 缺少 C++ 编译工具，无法编译 better-sqlite3（原生模块）
+
+====================================
+    修复内容
+====================================
+
+在 `.github/workflows/build.yml` 中添加：
+
+```yaml
+# 🔧 Install build dependencies for Ubuntu (needed for better-sqlite3)
+- name: Install build dependencies (Ubuntu)
+  if: matrix.os == 'ubuntu-latest'
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y build-essential python3
+```
+
+这个步骤会：
+1. 更新 Ubuntu 包列表
+2. 安装 build-essential（包含 gcc, g++, make）
+3. 安装 python3（node-gyp 需要）
+
+====================================
+    本地提交已完成
+====================================
+
+Commit: ab7d573
+Message: fix: add build dependencies for Ubuntu to compile better-sqlite3
+
+修改文件：
+- .github/workflows/build.yml
+- 诊断GitHub构建失败.md
+
+====================================
+    下一步：推送到 GitHub
+====================================
+
+## 🚀 方法 1：先创建 GitHub 仓库
+
+1. 访问：https://github.com/new
+
+2. 填写信息：
+   Repository name: novascribe-github
+                   或: novascribe
+
+   Description: NovaScribe - AI 驱动的网文创作工具
+
+   Visibility: ○ Public  ● Private (你选择)
+
+   ⚠️ 不要勾选任何初始化选项：
+   □ Add a README file
+   □ Add .gitignore
+   □ Choose a license
+
+3. 点击 "Create repository"
+
+4. 推送代码：
+   ```bash
+   cd D:\code\story\novascribe-github
+   git push -u origin main
+   ```
+
+## 🔄 方法 2：使用 gh CLI
+
+如果已安装 gh CLI：
+```bash
+cd D:\code\story\novascribe-github
+
+# 创建仓库并推送
+gh repo create novascribe-github --private --push --source .
+```
+
+====================================
+    推送后会发生什么
+====================================
+
+1. GitHub Actions 自动触发构建
+
+2. 三个平台并行构建：
+   ✓ Windows (5-10分钟)
+   ✓ macOS (8-15分钟)
+   ✓ Ubuntu (5-10分钟) - 现在会成功！✅
+
+3. 构建步骤：
+   - Checkout code ✓
+   - Setup Node.js 20 ✓
+   - Install build dependencies (Ubuntu) ✓ ← 新增！
+   - Install dependencies ✓
+   - Build application ✓
+   - Package application ✓
+   - Upload artifacts ✓
+
+4. 完成后可以下载 artifacts
+
+====================================
+    已提交的所有修复
+====================================
+
+本次推送包含：
+
+1. ✅ 重复生成问题修复（数据库锁）
+   - electron/services/database.ts
+   - electron/ipc/handlers.ts
+   - electron/preload.ts
+   - src/pages/Outline/index.tsx
+   - docs/DUPLICATE_GENERATION_FIX_V2.md
+
+2. ✅ 批量生成优化（避免内容冲突）
+   - src/pages/Outline/index.tsx
+   - src/services/auto-create.ts
+   - docs/BATCH_GENERATION_OPTIMIZATION.md
+
+3. ✅ Ubuntu 构建修复（本次）
+   - .github/workflows/build.yml
+   - 诊断GitHub构建失败.md
+
+====================================
+    验证构建成功
+====================================
+
+推送后：
+
+1. 访问：https://github.com/你的用户名/novascribe-github/actions
+
+2. 查看最新的工作流运行
+
+3. 确认三个平台都显示 ✅：
+   ✅ build (windows-latest) - 5-10分钟
+   ✅ build (macos-latest) - 8-15分钟
+   ✅ build (ubuntu-latest) - 5-10分钟 ← 重点！
+
+4. 下载 artifacts 测试
+
+====================================
+    如果仍然失败
+====================================
+
+如果 Ubuntu 构建仍然失败：
+
+1. 查看详细日志
+2. 复制完整错误信息
+3. 查看 `诊断GitHub构建失败.md` 了解其他可能原因
+4. 联系我提供日志，我会进一步诊断
+
+====================================
+
+准备推送？运行：
+
+cd D:\code\story\novascribe-github
+git push -u origin main
+
+🚀

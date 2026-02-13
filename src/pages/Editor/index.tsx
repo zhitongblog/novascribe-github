@@ -67,8 +67,7 @@ function Editor() {
     deleteVolume,
     deleteChapter,
     setCurrentVolume,
-    setCurrentChapter,
-    loadChapters
+    setCurrentChapter
   } = useProjectStore()
 
   const {

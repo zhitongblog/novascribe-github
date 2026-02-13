@@ -1,0 +1,109 @@
+====================================
+    配置 GitHub 认证（Token）
+====================================
+
+如果推送时提示 "Repository not found"，
+可能是因为 GitHub 需要 Personal Access Token。
+
+====================================
+    步骤 1：生成 Token
+====================================
+
+1. 访问：https://github.com/settings/tokens
+
+2. 点击 "Generate new token" → "Generate new token (classic)"
+
+3. 填写信息：
+   Note: NovaScribe Development
+   Expiration: 90 days （或选择其他）
+
+4. 勾选权限：
+   ✅ repo (完整的仓库权限)
+      ✅ repo:status
+      ✅ repo_deployment
+      ✅ public_repo
+      ✅ repo:invite
+      ✅ security_events
+
+   ✅ workflow (GitHub Actions 权限)
+
+5. 点击 "Generate token"
+
+6. ⚠️ 复制生成的 token（只显示一次！）
+   例如：ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+====================================
+    步骤 2：配置 Git 使用 Token
+====================================
+
+方法 1：直接在 URL 中使用（临时）
+--------------------------------------
+cd D:\code\story\novascribe-github
+
+git remote set-url origin https://ghp_你的token@github.com/zhitongblog/novascribe-github.git
+
+git push -u origin main
+
+
+方法 2：使用 Git Credential Manager（推荐）
+--------------------------------------
+当你运行 git push 时，会弹出认证窗口：
+
+用户名：zhitongblog
+密码：ghp_你的token（粘贴你的token）
+
+Git 会记住这个 token，下次不用再输入。
+
+
+方法 3：配置全局 Token
+--------------------------------------
+cd D:\code\story\novascribe-github
+
+# 配置用户名
+git config --global user.name "zhitongblog"
+
+# 配置邮箱
+git config --global user.email "你的邮箱@example.com"
+
+# 推送时会提示输入密码，输入 token
+git push -u origin main
+
+====================================
+    步骤 3：推送代码
+====================================
+
+配置完成后：
+
+cd D:\code\story\novascribe-github
+git push -u origin main
+
+====================================
+    验证推送成功
+====================================
+
+推送成功后：
+
+1. 访问：https://github.com/zhitongblog/novascribe-github
+
+2. 应该能看到所有代码文件
+
+3. 查看 Actions：
+   https://github.com/zhitongblog/novascribe-github/actions
+
+4. 等待构建完成（5-15分钟）
+
+====================================
+    常见问题
+====================================
+
+Q: 推送时要求输入用户名密码？
+A: 用户名：zhitongblog
+   密码：粘贴你的 Personal Access Token
+
+Q: Token 过期了怎么办？
+A: 重新生成一个新的 token，然后重新配置
+
+Q: 能看到仓库但推送失败？
+A: 检查 token 是否有 repo 权限
+
+====================================

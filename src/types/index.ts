@@ -223,6 +223,9 @@ export interface ElectronAPI {
     createVolume: (volume: Partial<Volume>) => Promise<Volume>
     updateVolume: (id: string, data: Partial<Volume>) => Promise<Volume>
     deleteVolume: (id: string) => Promise<void>
+    trySetGeneratingLock: (volumeId: string) => Promise<{ success: boolean; lockedAt?: number; lockedMinutesAgo?: number }>
+    clearGeneratingLock: (volumeId: string) => Promise<void>
+    checkGeneratingLock: (volumeId: string) => Promise<{ isLocked: boolean; lockedAt?: number; lockedMinutesAgo?: number }>
 
     getChapters: (volumeId: string) => Promise<Chapter[]>
     getChapter: (id: string) => Promise<Chapter | null>
