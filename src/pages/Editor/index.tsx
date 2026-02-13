@@ -548,11 +548,15 @@ function Editor() {
       return
     }
 
-    // 按顺序排序章节（从第一章开始）
+    // 按顺序排序章节（从第一章开始）- 使用卷的order字段而不是volumeId字符串比较
     const sortedChapters = [...chapters].sort((a, b) => {
-      if (a.volumeId !== b.volumeId) {
-        return a.volumeId.localeCompare(b.volumeId)
+      const volA = volumes.find(v => v.id === a.volumeId)
+      const volB = volumes.find(v => v.id === b.volumeId)
+      // 先按卷的order排序
+      if (volA && volB && volA.order !== volB.order) {
+        return volA.order - volB.order
       }
+      // 再按章节order排序
       return a.order - b.order
     })
 
@@ -611,11 +615,15 @@ function Editor() {
 
       console.log('📊 [Editor] 自动更新配置:', autoUpdateConfig)
 
-      // 获取所有章节并排序
-      const allChaptersWithVolume = chapters.map(c => ({
-        ...c,
-        volumeId: c.volumeId
-      }))
+      // 获取所有章节并添加卷顺序信息（用于正确排序）
+      const allChaptersWithVolume = chapters.map(c => {
+        const vol = volumes.find(v => v.id === c.volumeId)
+        return {
+          ...c,
+          volumeId: c.volumeId,
+          volumeOrder: vol?.order ?? 0  // 添加卷的顺序用于排序
+        }
+      })
 
       const result = await autoWriteAll(
         currentProject.worldSetting,

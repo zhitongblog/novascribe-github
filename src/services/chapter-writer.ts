@@ -587,6 +587,7 @@ export async function autoWriteAll(
   allChapters: {
     id: string
     volumeId: string
+    volumeOrder?: number  // 卷的顺序，用于正确排序
     title: string
     outline: string
     content: string
@@ -623,11 +624,15 @@ export async function autoWriteAll(
 
   console.log(`📊 [AutoWrite] 自动更新配置：`, config)
 
-  // 按卷和章节顺序排序
+  // 按卷和章节顺序排序 - 使用volumeOrder而不是volumeId字符串比较
   const sortedChapters = [...allChapters].sort((a, b) => {
-    if (a.volumeId !== b.volumeId) {
-      return a.volumeId.localeCompare(b.volumeId)
+    // 先按卷的顺序排序（使用volumeOrder，如果没有则按volumeId）
+    const volOrderA = a.volumeOrder ?? 0
+    const volOrderB = b.volumeOrder ?? 0
+    if (volOrderA !== volOrderB) {
+      return volOrderA - volOrderB
     }
+    // 再按章节order排序
     return a.order - b.order
   })
 
@@ -664,7 +669,6 @@ export async function autoWriteAll(
   }
 
   const chaptersToWrite = sortedChapters.slice(startIndex)
-  const totalChapters = chaptersToWrite.length
 
   for (let i = 0; i < chaptersToWrite.length; i++) {
     if (shouldStop()) {
@@ -676,6 +680,7 @@ export async function autoWriteAll(
 
     // 🔥 计算全局章节编号（而不是局部索引）
     const globalChapterNumber = startIndex + i + 1
+    console.log(`[DEBUG] 章节编号计算: startIndex=${startIndex}, i=${i}, globalChapterNumber=${globalChapterNumber}, totalChapters=${sortedChapters.length}`)
 
     // 跳过已有内容的章节
     if (chapter.content && chapter.content.trim().length > 500) {
@@ -814,8 +819,8 @@ export async function autoWriteAll(
   }
 
   onProgress({
-    currentChapter: totalChapters,
-    totalChapters,
+    currentChapter: sortedChapters.length,  // 🔥 使用全书总章节数
+    totalChapters: sortedChapters.length,   // 🔥 使用全书总章节数
     chapterTitle: '',
     status: 'complete'
   })
