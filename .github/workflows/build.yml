@@ -12,7 +12,13 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            build_cmd: npm run build:win
+          - os: macos-latest
+            build_cmd: npm run build:mac
+          - os: ubuntu-latest
+            build_cmd: npm run build:linux
 
     runs-on: ${{ matrix.os }}
 
@@ -24,9 +30,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # cache disabled because package-lock.json is not committed
 
-      # 🔧 Install build dependencies for Ubuntu (needed for better-sqlite3)
+      # Install build dependencies for Ubuntu (needed for better-sqlite3)
       - name: Install build dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -36,28 +41,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # 只运行对应平台的构建命令，避免重复构建
       - name: Build application
-        run: npm run build
-
-      - name: Package application (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npm run build:win
-
-      - name: Package application (macOS)
-        if: matrix.os == 'macos-latest'
-        run: npm run build:mac
-
-      - name: Package application (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: npm run build:linux
+        run: ${{ matrix.build_cmd }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: novascribe-${{ matrix.os }}
-          path: |
-            dist/**/*
-            out/**/*
+          path: release/**/*
           retention-days: 7
 
   release:
@@ -69,16 +61,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            novascribe-windows-latest/**/*
-            novascribe-macos-latest/**/*
-            novascribe-ubuntu-latest/**/*
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.deb
+            artifacts/**/*.AppImage
           draft: false
           prerelease: false
         env:
