@@ -58,8 +58,8 @@ export class ServerSyncService {
         }
       }
 
-      // 检查用户状态（使用本地缓存，避免同步时额外的网络请求）
-      const userStatus = this.authService.getLocalUserStatus()
+      // 检查用户状态（从服务器获取最新状态，确保已批准的账号能正常同步）
+      const userStatus = await this.authService.checkUserStatus()
       if (!userStatus.isApproved) {
         return {
           success: false,

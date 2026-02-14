@@ -139,11 +139,19 @@ function GlobalSettings() {
 
   // 保存 Gemini API Key
   const handleSaveGeminiKey = async () => {
-    if (!geminiApiKey.trim() || geminiApiKey.includes('••••')) {
-      if (!isKeyModified) {
-        message.info('API Key 未修改')
-        return
-      }
+    // 如果已配置且未修改，静默返回（不显示提示）
+    if (!isKeyModified && geminiConfigured) {
+      return
+    }
+
+    // 如果是遮蔽后的 key（包含 ••••），说明用户没有真正修改
+    if (geminiApiKey.includes('••••')) {
+      return
+    }
+
+    if (!geminiApiKey.trim()) {
+      message.warning('请输入 API Key')
+      return
     }
 
     try {
@@ -475,6 +483,177 @@ function GlobalSettings() {
         <h1 className="text-2xl font-bold text-dark-text mb-1">全局设置</h1>
         <p className="text-dark-muted">配置 API 密钥和账户登录</p>
       </div>
+
+      {/* Gemini API 配置 - 放在最顶部方便配置 */}
+      <Card
+        title={
+          <Space>
+            <KeyOutlined className="text-purple-500" />
+            <span>Gemini API 配置</span>
+            {geminiConfigured && quotaInfo?.isValid && !quotaInfo.quotaExceeded && (
+              <CheckCircleOutlined className="text-green-500" />
+            )}
+            {quotaInfo?.quotaExceeded && (
+              <WarningOutlined className="text-orange-500" />
+            )}
+          </Space>
+        }
+        className="mb-6"
+        style={{ background: '#16213e', border: '1px solid #0f3460' }}
+      >
+        <Alert
+          message="Gemini API 用于 AI 写作功能"
+          description="配置 API Key 后可使用 AI 生成大纲、角色设定、自动续写等功能。推荐使用 Gemini 2.0 Flash 模型。"
+          type="info"
+          showIcon
+          className="mb-4"
+        />
+
+        {/* 配额状态显示 */}
+        {quotaInfo && (
+          <Alert
+            message={
+              <Space>
+                {quotaInfo.isValid && !quotaInfo.quotaExceeded ? (
+                  <><CheckCircleOutlined className="text-green-500" /> API 状态正常</>
+                ) : quotaInfo.quotaExceeded ? (
+                  <><WarningOutlined className="text-orange-500" /> 配额已用尽</>
+                ) : (
+                  <><WarningOutlined className="text-red-500" /> API 验证失败</>
+                )}
+              </Space>
+            }
+            description={
+              <div className="space-y-1">
+                <div>当前模型: <Badge color="blue" text={quotaInfo.model} /></div>
+                {quotaInfo.error && <div className="text-red-400">{quotaInfo.error}</div>}
+                {quotaInfo.quotaExceeded && (
+                  <div className="mt-2">
+                    <strong>解决方案：</strong>
+                    <ol className="list-decimal list-inside mt-1 space-y-1">
+                      <li>等待配额重置（通常每24小时重置一次）</li>
+                      <li>使用新的 API Key（<a href="#" className="text-primary-400" onClick={(e) => {
+                        e.preventDefault()
+                        window.electron.system.openExternal('https://aistudio.google.com/apikey')
+                      }}>获取新 Key</a>）</li>
+                      <li>点击下方"查找可用模型"尝试切换到其他模型</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            }
+            type={quotaInfo.isValid && !quotaInfo.quotaExceeded ? 'success' : quotaInfo.quotaExceeded ? 'warning' : 'error'}
+            showIcon
+            className="mb-4"
+          />
+        )}
+
+        <div className="space-y-4">
+          {/* 模型选择 */}
+          <div>
+            <label className="block text-dark-text mb-2">
+              <Space>
+                <ThunderboltOutlined />
+                选择模型
+                {AVAILABLE_MODELS[selectedModel as keyof typeof AVAILABLE_MODELS]?.recommended && (
+                  <Badge color="green" text="推荐" />
+                )}
+              </Space>
+            </label>
+            <Select
+              value={selectedModel}
+              onChange={handleSwitchModel}
+              loading={isSwitchingModel}
+              disabled={!geminiConfigured}
+              className="w-full"
+              options={Object.entries(AVAILABLE_MODELS).map(([key, value]) => ({
+                label: (
+                  <Space>
+                    {value.name}
+                    {value.recommended && <Badge color="green" text="推荐" />}
+                  </Space>
+                ),
+                value: key,
+                title: value.description
+              }))}
+            />
+            <div className="text-dark-muted text-xs mt-1">
+              {AVAILABLE_MODELS[selectedModel as keyof typeof AVAILABLE_MODELS]?.description}
+            </div>
+          </div>
+
+          {/* API Key 输入 */}
+          <div>
+            <label className="block text-dark-text mb-2">API Key</label>
+            <div className="flex gap-2">
+              <Input.Password
+                placeholder="输入 Gemini API Key"
+                value={geminiApiKey}
+                onChange={(e) => {
+                  setGeminiApiKey(e.target.value)
+                  setIsKeyModified(true)
+                }}
+                className="flex-1"
+              />
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={handleSaveGeminiKey}
+              >
+                保存并验证
+              </Button>
+            </div>
+          </div>
+
+          {/* 配额检查按钮 */}
+          {geminiConfigured && (
+            <Space wrap>
+              <Button
+                icon={<ReloadOutlined spin={isCheckingQuota} />}
+                onClick={handleCheckQuota}
+                loading={isCheckingQuota}
+              >
+                检查配额
+              </Button>
+              <Button
+                icon={<ThunderboltOutlined />}
+                onClick={handleFindAvailableModel}
+                loading={isCheckingQuota}
+              >
+                查找可用模型
+              </Button>
+            </Space>
+          )}
+
+          <div className="text-dark-muted text-sm">
+            <a
+              href="#"
+              className="text-primary-400"
+              onClick={(e) => {
+                e.preventDefault()
+                window.electron.system.openExternal(
+                  'https://aistudio.google.com/app/apikey'
+                )
+              }}
+            >
+              获取 Gemini API Key →
+            </a>
+            {' | '}
+            <a
+              href="#"
+              className="text-primary-400"
+              onClick={(e) => {
+                e.preventDefault()
+                window.electron.system.openExternal(
+                  'https://ai.google.dev/gemini-api/docs/models/gemini'
+                )
+              }}
+            >
+              查看模型文档 →
+            </a>
+          </div>
+        </div>
+      </Card>
 
       {/* 服务端配置 */}
       <Card
@@ -909,175 +1088,6 @@ function GlobalSettings() {
         </div>
       </Card>
 
-      {/* Gemini API 配置 */}
-      <Card
-        title={
-          <Space>
-            <KeyOutlined className="text-purple-500" />
-            <span>Gemini API 配置</span>
-            {geminiConfigured && quotaInfo?.isValid && !quotaInfo.quotaExceeded && (
-              <CheckCircleOutlined className="text-green-500" />
-            )}
-            {quotaInfo?.quotaExceeded && (
-              <WarningOutlined className="text-orange-500" />
-            )}
-          </Space>
-        }
-        style={{ background: '#16213e', border: '1px solid #0f3460' }}
-      >
-        <Alert
-          message="Gemini API 用于 AI 写作功能"
-          description="配置 API Key 后可使用 AI 生成大纲、角色设定、自动续写等功能。推荐使用 Gemini 2.0 Flash 模型进行大纲生成。"
-          type="info"
-          showIcon
-          className="mb-4"
-        />
-
-        {/* 配额状态显示 */}
-        {quotaInfo && (
-          <Alert
-            message={
-              <Space>
-                {quotaInfo.isValid && !quotaInfo.quotaExceeded ? (
-                  <><CheckCircleOutlined className="text-green-500" /> API 状态正常</>
-                ) : quotaInfo.quotaExceeded ? (
-                  <><WarningOutlined className="text-orange-500" /> 配额已用尽</>
-                ) : (
-                  <><WarningOutlined className="text-red-500" /> API 验证失败</>
-                )}
-              </Space>
-            }
-            description={
-              <div className="space-y-1">
-                <div>当前模型: <Badge color="blue" text={quotaInfo.model} /></div>
-                {quotaInfo.error && <div className="text-red-400">{quotaInfo.error}</div>}
-                {quotaInfo.quotaExceeded && (
-                  <div className="mt-2">
-                    <strong>解决方案：</strong>
-                    <ol className="list-decimal list-inside mt-1 space-y-1">
-                      <li>等待配额重置（通常每24小时重置一次）</li>
-                      <li>使用新的 API Key（<a href="#" className="text-primary-400" onClick={(e) => {
-                        e.preventDefault()
-                        window.electron.system.openExternal('https://aistudio.google.com/apikey')
-                      }}>获取新 Key</a>）</li>
-                      <li>点击下方"查找可用模型"尝试切换到其他模型</li>
-                    </ol>
-                  </div>
-                )}
-              </div>
-            }
-            type={quotaInfo.isValid && !quotaInfo.quotaExceeded ? 'success' : quotaInfo.quotaExceeded ? 'warning' : 'error'}
-            showIcon
-            className="mb-4"
-          />
-        )}
-
-        <div className="space-y-4">
-          {/* 模型选择 */}
-          <div>
-            <label className="block text-dark-text mb-2">
-              <Space>
-                <ThunderboltOutlined />
-                选择模型
-                {AVAILABLE_MODELS[selectedModel as keyof typeof AVAILABLE_MODELS]?.recommended && (
-                  <Badge color="green" text="推荐" />
-                )}
-              </Space>
-            </label>
-            <Select
-              value={selectedModel}
-              onChange={handleSwitchModel}
-              loading={isSwitchingModel}
-              disabled={!geminiConfigured}
-              className="w-full"
-              options={Object.entries(AVAILABLE_MODELS).map(([key, value]) => ({
-                label: (
-                  <Space>
-                    {value.name}
-                    {value.recommended && <Badge color="green" text="推荐" />}
-                  </Space>
-                ),
-                value: key,
-                title: value.description
-              }))}
-            />
-            <div className="text-dark-muted text-xs mt-1">
-              {AVAILABLE_MODELS[selectedModel as keyof typeof AVAILABLE_MODELS]?.description}
-            </div>
-          </div>
-
-          {/* API Key 输入 */}
-          <div>
-            <label className="block text-dark-text mb-2">API Key</label>
-            <div className="flex gap-2">
-              <Input.Password
-                placeholder="输入 Gemini API Key"
-                value={geminiApiKey}
-                onChange={(e) => {
-                  setGeminiApiKey(e.target.value)
-                  setIsKeyModified(true)
-                }}
-                className="flex-1"
-              />
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={handleSaveGeminiKey}
-              >
-                保存并验证
-              </Button>
-            </div>
-          </div>
-
-          {/* 配额检查按钮 */}
-          {geminiConfigured && (
-            <Space wrap>
-              <Button
-                icon={<ReloadOutlined spin={isCheckingQuota} />}
-                onClick={handleCheckQuota}
-                loading={isCheckingQuota}
-              >
-                检查配额
-              </Button>
-              <Button
-                icon={<ThunderboltOutlined />}
-                onClick={handleFindAvailableModel}
-                loading={isCheckingQuota}
-              >
-                查找可用模型
-              </Button>
-            </Space>
-          )}
-
-          <div className="text-dark-muted text-sm">
-            <a
-              href="#"
-              className="text-primary-400"
-              onClick={(e) => {
-                e.preventDefault()
-                window.electron.system.openExternal(
-                  'https://aistudio.google.com/app/apikey'
-                )
-              }}
-            >
-              获取 Gemini API Key →
-            </a>
-            {' | '}
-            <a
-              href="#"
-              className="text-primary-400"
-              onClick={(e) => {
-                e.preventDefault()
-                window.electron.system.openExternal(
-                  'https://ai.google.dev/gemini-api/docs/models/gemini'
-                )
-              }}
-            >
-              查看模型文档 →
-            </a>
-          </div>
-        </div>
-      </Card>
     </div>
   )
 }

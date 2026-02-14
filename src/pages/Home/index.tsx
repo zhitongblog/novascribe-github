@@ -28,6 +28,7 @@ function Home() {
   const {
     createProject,
     createVolume,
+    createChapter,
     createCharacter
   } = useProjectStore()
 
@@ -170,19 +171,36 @@ function Home() {
         })
       }
 
-      // 创建卷结构（章节在大纲页面手动生成）
+      // 创建卷结构
       setPhase('saving')
       const totalVolumes = result.volumes.length
+      const isMicroNovel = formData.scale === 'micro'
+      let totalChaptersCreated = 0
 
       for (let i = 0; i < result.volumes.length; i++) {
         const vol = result.volumes[i]
         setProgressMessage(`正在保存第${i + 1}/${totalVolumes}卷结构...`)
 
-        await createVolume({
+        const volume = await createVolume({
           projectId: project.id,
           title: vol.title,
           summary: vol.summary
         })
+
+        // 微小说：直接保存章节大纲（无需手动生成）
+        if (isMicroNovel && vol.chapters && vol.chapters.length > 0 && volume) {
+          setProgressMessage(`正在保存章节大纲...`)
+          for (let j = 0; j < vol.chapters.length; j++) {
+            const ch = vol.chapters[j]
+            await createChapter({
+              volumeId: volume.id,
+              title: ch.title,
+              outline: ch.outline,
+              content: ''
+            })
+            totalChaptersCreated++
+          }
+        }
 
         setProgress(50 + Math.floor(((i + 1) / totalVolumes) * 45))
       }
@@ -192,7 +210,11 @@ function Home() {
       setPhase('complete')
       setStep('done')
 
-      message.success(`创作框架生成完成！共${totalVolumes}卷，请在大纲页面生成各卷章节`)
+      if (isMicroNovel && totalChaptersCreated > 0) {
+        message.success(`创作框架生成完成！共${totalChaptersCreated}章，可直接开始写作`)
+      } else {
+        message.success(`创作框架生成完成！共${totalVolumes}卷，请在大纲页面生成各卷章节`)
+      }
 
       // 跳转到编辑页面
       setTimeout(() => {
