@@ -6,6 +6,8 @@ interface SyncResult {
   success: boolean
   uploaded?: number
   downloaded?: number
+  deleted?: number
+  skippedDeleted?: number
   conflicts?: number
   errors?: string[]
   error?: string
@@ -74,6 +76,10 @@ export class ServerSyncService {
         }
       }
 
+      // 首先同步本地删除到服务端
+      const deletionResult = await this.syncDeletions(accessToken)
+      console.log('[ServerSync] 删除同步完成:', deletionResult)
+
       // 获取本地项目列表
       const localProjects = await this.database.getProjects()
       console.log('[ServerSync] 本地项目数量:', localProjects.length)
@@ -84,6 +90,12 @@ export class ServerSyncService {
 
       // 比较并同步
       const result = await this.compareAndSync(localProjects, serverProjects, accessToken)
+
+      // 合并删除同步的结果
+      result.deleted = deletionResult.deleted
+      if (deletionResult.errors.length > 0) {
+        result.errors = [...(result.errors || []), ...deletionResult.errors]
+      }
 
       console.log('[ServerSync] 同步完成:', result)
       return result
@@ -180,8 +192,17 @@ export class ServerSyncService {
     }
 
     // 遍历服务端项目，下载本地没有的
+    let skippedDeleted = 0
     for (const serverProject of serverProjects) {
       if (!localProjectMap.has(serverProject.id)) {
+        // 检查项目是否在删除记录中
+        if (this.database.isProjectDeleted(serverProject.id)) {
+          // 项目已被本地删除，跳过下载
+          console.log('[ServerSync] 跳过已删除的项目:', serverProject.title)
+          skippedDeleted++
+          continue
+        }
+
         try {
           // 服务端有，本地没有 -> 下载
           console.log('[ServerSync] 下载新项目:', serverProject.title)
@@ -198,6 +219,7 @@ export class ServerSyncService {
       success: errors.length === 0,
       uploaded,
       downloaded,
+      skippedDeleted,
       conflicts,
       errors: errors.length > 0 ? errors : undefined
     }
@@ -470,5 +492,68 @@ export class ServerSyncService {
       hash = hash & hash // 转换为32位整数
     }
     return Math.abs(hash).toString(36)
+  }
+
+  /**
+   * 从服务端删除项目
+   */
+  async deleteServerProject(projectId: string, accessToken?: string): Promise<void> {
+    const token = accessToken || this.authService.getAccessToken()
+    if (!token) {
+      throw new Error('无法获取访问令牌')
+    }
+
+    const response = await fetch(`${this.serverUrl}/api/sync/project/${projectId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+
+    if (!response.ok) {
+      // 404 表示服务端已经没有这个项目，视为成功
+      if (response.status === 404) {
+        console.log('[ServerSync] 服务端项目已不存在:', projectId)
+        return
+      }
+      throw new Error(`删除失败: HTTP ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.error || '删除失败')
+    }
+
+    console.log('[ServerSync] 服务端项目删除成功:', projectId)
+  }
+
+  /**
+   * 同步本地删除到服务端
+   */
+  private async syncDeletions(accessToken: string): Promise<{ deleted: number; errors: string[] }> {
+    let deleted = 0
+    const errors: string[] = []
+
+    // 获取未同步的删除记录
+    const deletions = this.database.getUnsyncedDeletions()
+    console.log('[ServerSync] 待同步的删除记录:', deletions.length)
+
+    for (const deletion of deletions) {
+      try {
+        await this.deleteServerProject(deletion.id, accessToken)
+        this.database.markDeletionSynced(deletion.id)
+        deleted++
+        console.log('[ServerSync] 已同步删除:', deletion.title)
+      } catch (error: any) {
+        console.error('[ServerSync] 同步删除失败:', deletion.title, error)
+        errors.push(`删除 ${deletion.title}: ${error.message}`)
+      }
+    }
+
+    // 清理旧的删除记录
+    this.database.cleanupOldDeletions()
+
+    return { deleted, errors }
   }
 }

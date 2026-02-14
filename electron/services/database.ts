@@ -129,11 +129,22 @@ export class DatabaseService {
       )
     `)
 
+    // 删除记录表（用于同步时追踪已删除的项目）
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS deleted_projects (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        deleted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        synced INTEGER DEFAULT 0
+      )
+    `)
+
     // 创建索引
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_volumes_project ON volumes(project_id);
       CREATE INDEX IF NOT EXISTS idx_chapters_volume ON chapters(volume_id);
       CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
+      CREATE INDEX IF NOT EXISTS idx_deleted_projects_synced ON deleted_projects(synced);
     `)
   }
 
@@ -219,8 +230,73 @@ export class DatabaseService {
   }
 
   deleteProject(id: string): void {
+    // 获取项目标题用于记录
+    const project = this.getProject(id)
+    const title = project?.title || '未知项目'
+
+    // 记录到删除表（用于同步时同步删除服务端数据）
+    const recordStmt = this.db!.prepare(`
+      INSERT OR REPLACE INTO deleted_projects (id, title, deleted_at, synced)
+      VALUES (?, ?, ?, 0)
+    `)
+    recordStmt.run(id, title, new Date().toISOString())
+
+    // 删除项目
     const stmt = this.db!.prepare('DELETE FROM projects WHERE id = ?')
     stmt.run(id)
+  }
+
+  /**
+   * 获取未同步的删除记录
+   */
+  getUnsyncedDeletions(): Array<{ id: string; title: string; deletedAt: string }> {
+    const stmt = this.db!.prepare(`
+      SELECT id, title, deleted_at as deletedAt FROM deleted_projects WHERE synced = 0
+    `)
+    return stmt.all() as any[]
+  }
+
+  /**
+   * 标记删除记录为已同步
+   */
+  markDeletionSynced(id: string): void {
+    const stmt = this.db!.prepare(`
+      UPDATE deleted_projects SET synced = 1 WHERE id = ?
+    `)
+    stmt.run(id)
+  }
+
+  /**
+   * 检查项目是否在删除记录中
+   */
+  isProjectDeleted(id: string): boolean {
+    const stmt = this.db!.prepare(`
+      SELECT 1 FROM deleted_projects WHERE id = ?
+    `)
+    return !!stmt.get(id)
+  }
+
+  /**
+   * 从删除记录中移除（用于恢复项目时）
+   */
+  removeFromDeletedProjects(id: string): void {
+    const stmt = this.db!.prepare(`
+      DELETE FROM deleted_projects WHERE id = ?
+    `)
+    stmt.run(id)
+  }
+
+  /**
+   * 清理已同步的删除记录（保留最近30天的记录）
+   */
+  cleanupOldDeletions(): void {
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const stmt = this.db!.prepare(`
+      DELETE FROM deleted_projects WHERE synced = 1 AND deleted_at < ?
+    `)
+    stmt.run(thirtyDaysAgo.toISOString())
   }
 
   private parseProjectRow(row: any): any {
