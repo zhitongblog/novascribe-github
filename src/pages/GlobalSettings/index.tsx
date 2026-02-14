@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Input, Button, message, Space, Alert, Switch, Select, Badge, Slider, Tooltip, Tag } from 'antd'
+import { Card, Input, Button, message, Space, Alert, Switch, Select, Badge, Slider, Tooltip, Tag, Modal } from 'antd'
 import {
   SaveOutlined,
   KeyOutlined,
@@ -26,6 +26,7 @@ import {
   type QuotaInfo
 } from '../../services/gemini'
 import type { ServerUser } from '../../types'
+import { ErrorDisplay, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
 
 function GlobalSettings() {
   const [geminiApiKey, setGeminiApiKey] = useState('')
@@ -47,6 +48,9 @@ function GlobalSettings() {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true)
   const [summaryInterval, setSummaryInterval] = useState(20)
   const [characterInterval, setCharacterInterval] = useState(30)
+
+  // 错误显示状态
+  const [geminiError, setGeminiError] = useState<ErrorInfo | null>(null)
 
   // 服务端配置
   const [serverUrl, setServerUrl] = useState('https://storyglint.com')
@@ -168,6 +172,7 @@ function GlobalSettings() {
     }
 
     setIsCheckingQuota(true)
+    setGeminiError(null)
     try {
       const info = await checkQuota()
       setQuotaInfo(info)
@@ -175,12 +180,23 @@ function GlobalSettings() {
       if (info.isValid && !info.quotaExceeded) {
         message.success('配额检查通过，API 运行正常')
       } else if (info.quotaExceeded) {
-        message.warning('配额已用尽，请检查您的 API 计划')
+        const error = parseError(info.error || '配额已用尽')
+        error.title = 'API 配额已用尽'
+        error.suggestions = [
+          '等待配额重置（通常每24小时重置一次）',
+          '使用新的 API Key',
+          '点击"查找可用模型"尝试切换到其他模型'
+        ]
+        setGeminiError(error)
       } else {
-        message.error(info.error || 'API 验证失败')
+        const error = parseError(info.error || 'API 验证失败')
+        error.title = 'API 验证失败'
+        setGeminiError(error)
       }
     } catch (error: any) {
-      message.error(`检查失败: ${error.message || String(error)}`)
+      const parsedError = parseError(error)
+      parsedError.title = 'Gemini API 检查失败'
+      setGeminiError(parsedError)
       setQuotaInfo({
         isValid: false,
         model: selectedModel,
@@ -199,6 +215,7 @@ function GlobalSettings() {
     }
 
     setIsCheckingQuota(true)
+    setGeminiError(null)
     const hideLoading = message.loading('正在测试所有模型...', 0)
 
     try {
@@ -211,16 +228,32 @@ function GlobalSettings() {
         setSelectedModel(availableModel)
         await handleSwitchModel(availableModel)
       } else {
-        const failureInfo = Object.entries(results)
+        const failureDetails = Object.entries(results)
           .map(([model, info]) => `${model}: ${info.error || '失败'}`)
           .join('\n')
-        message.error(`所有模型均不可用:\n${failureInfo}`)
+
+        const error: ErrorInfo = {
+          title: '所有模型均不可用',
+          message: '测试了所有可用模型，但都无法正常使用',
+          details: failureDetails,
+          suggestions: [
+            '检查 API Key 是否正确',
+            '确认网络连接正常',
+            '如果在中国大陆，请确保已配置代理',
+            '尝试使用新的 API Key',
+            '等待一段时间后重试（可能是临时性问题）'
+          ],
+          timestamp: new Date()
+        }
+        setGeminiError(error)
       }
 
       console.log('Model test results:', results)
     } catch (error: any) {
       hideLoading()
-      message.error(`测试失败: ${error.message || String(error)}`)
+      const parsedError = parseError(error)
+      parsedError.title = '模型测试失败'
+      setGeminiError(parsedError)
     } finally {
       setIsCheckingQuota(false)
     }
@@ -414,6 +447,29 @@ function GlobalSettings() {
 
   return (
     <div className="p-6 fade-in max-w-4xl mx-auto">
+      {/* Gemini API 错误弹窗 */}
+      <Modal
+        open={!!geminiError}
+        onCancel={() => setGeminiError(null)}
+        footer={null}
+        width={600}
+        centered
+        destroyOnClose
+      >
+        {geminiError && (
+          <ErrorDisplay
+            error={geminiError}
+            onRetry={() => {
+              setGeminiError(null)
+              handleCheckQuota()
+            }}
+            onDismiss={() => setGeminiError(null)}
+            retryText="重新检查"
+            dismissText="关闭"
+          />
+        )}
+      </Modal>
+
       {/* 头部 */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-dark-text mb-1">全局设置</h1>

@@ -56,8 +56,8 @@ export class ServerSyncService {
         }
       }
 
-      // 检查用户状态
-      const userStatus = this.authService.checkUserStatus()
+      // 检查用户状态（使用本地缓存，避免同步时额外的网络请求）
+      const userStatus = this.authService.getLocalUserStatus()
       if (!userStatus.isApproved) {
         return {
           success: false,

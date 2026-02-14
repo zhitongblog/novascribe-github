@@ -471,9 +471,113 @@ export class ServerAuthService {
   }
 
   /**
-   * 检查用户状态
+   * 检查用户状态（从服务器获取最新状态）
    */
-  checkUserStatus(): {
+  async checkUserStatus(): Promise<{
+    isApproved: boolean
+    status: string
+    message?: string
+  }> {
+    const tokens = this.getTokens()
+
+    if (!tokens?.accessToken) {
+      return {
+        isApproved: false,
+        status: 'not_logged_in',
+        message: '未登录'
+      }
+    }
+
+    try {
+      // 从服务器获取最新的用户信息
+      console.log('[ServerAuth] 从服务器获取最新用户状态...')
+      const user = await this.fetchUserInfo(tokens.accessToken)
+
+      if (user) {
+        // 更新本地存储的用户信息
+        this.saveUser(user)
+        console.log('[ServerAuth] 用户状态已更新:', user.status)
+
+        switch (user.status) {
+          case 'approved':
+            return {
+              isApproved: true,
+              status: 'approved'
+            }
+          case 'pending':
+            return {
+              isApproved: false,
+              status: 'pending',
+              message: '您的账号正在等待管理员审批'
+            }
+          case 'rejected':
+            return {
+              isApproved: false,
+              status: 'rejected',
+              message: '您的账号申请已被拒绝'
+            }
+          case 'suspended':
+            return {
+              isApproved: false,
+              status: 'suspended',
+              message: '您的账号已被暂停'
+            }
+          default:
+            return {
+              isApproved: false,
+              status: 'unknown',
+              message: '未知状态'
+            }
+        }
+      } else {
+        // 如果无法获取用户信息，可能是 token 过期，尝试刷新
+        console.log('[ServerAuth] 无法获取用户信息，尝试刷新令牌...')
+        const refreshResult = await this.refreshAccessToken()
+
+        if (refreshResult.success && refreshResult.tokens) {
+          // 使用新 token 再次获取用户信息
+          const refreshedUser = await this.fetchUserInfo(refreshResult.tokens.accessToken)
+          if (refreshedUser) {
+            this.saveUser(refreshedUser)
+            return {
+              isApproved: refreshedUser.status === 'approved',
+              status: refreshedUser.status,
+              message: refreshedUser.status === 'pending' ? '您的账号正在等待管理员审批' : undefined
+            }
+          }
+        }
+
+        return {
+          isApproved: false,
+          status: 'error',
+          message: '无法获取用户状态，请重新登录'
+        }
+      }
+    } catch (error: any) {
+      console.error('[ServerAuth] 检查用户状态失败:', error)
+
+      // 如果网络错误，返回本地存储的状态
+      const localUser = this.getUser()
+      if (localUser) {
+        return {
+          isApproved: localUser.status === 'approved',
+          status: localUser.status,
+          message: `无法连接服务器，显示本地缓存状态: ${localUser.status}`
+        }
+      }
+
+      return {
+        isApproved: false,
+        status: 'error',
+        message: error.message || '检查状态失败'
+      }
+    }
+  }
+
+  /**
+   * 获取本地存储的用户状态（不请求服务器）
+   */
+  getLocalUserStatus(): {
     isApproved: boolean
     status: string
     message?: string

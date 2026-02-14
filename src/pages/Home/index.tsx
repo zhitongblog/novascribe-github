@@ -15,11 +15,12 @@ import { useProjectStore } from '../../stores/project'
 import { SCALE_OPTIONS, GENRE_CATEGORIES, STYLE_CATEGORIES } from '../../types'
 import { autoCreateNovel } from '../../services/auto-create'
 import { isGeminiReady, initGemini, generateBookTitle } from '../../services/gemini'
+import { ErrorPage, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
 type CheckboxValueType = string | number | boolean
 
 const { TextArea } = Input
 
-type CreateStep = 'input' | 'generating' | 'done'
+type CreateStep = 'input' | 'generating' | 'done' | 'error'
 type GeneratePhase = 'init' | 'world' | 'characters' | 'outline' | 'saving' | 'complete'
 
 function Home() {
@@ -34,6 +35,7 @@ function Home() {
   const [phase, setPhase] = useState<GeneratePhase>('init')
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
+  const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null)
 
   const [formData, setFormData] = useState({
     title: '',
@@ -199,8 +201,16 @@ function Home() {
 
     } catch (error: any) {
       console.error('Auto create error:', error)
-      message.error(error.message || '生成失败，请重试')
-      setStep('input')
+      const parsedError = parseError(error)
+      parsedError.title = '大纲生成失败'
+      // 添加针对大纲生成的特定建议
+      if (!parsedError.suggestions) {
+        parsedError.suggestions = []
+      }
+      parsedError.suggestions.unshift('检查灵感描述是否足够详细')
+      parsedError.suggestions.unshift('确保 Gemini API Key 配置正确')
+      setErrorInfo(parsedError)
+      setStep('error')
       setProgressMessage('')
     }
   }
@@ -224,6 +234,25 @@ function Home() {
       case 'complete': return '创作完成！'
       default: return '处理中...'
     }
+  }
+
+  // 错误页面
+  if (step === 'error' && errorInfo) {
+    return (
+      <ErrorPage
+        error={errorInfo}
+        onRetry={() => {
+          setErrorInfo(null)
+          setStep('input')
+        }}
+        onDismiss={() => {
+          setErrorInfo(null)
+          setStep('input')
+        }}
+        retryText="返回修改"
+        dismissText="关闭"
+      />
+    )
   }
 
   // 生成中页面

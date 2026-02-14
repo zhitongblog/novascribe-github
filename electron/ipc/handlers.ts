@@ -275,8 +275,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, services: Services) {
       return serverAuth.isLoggedIn()
     })
 
-    ipcMain.handle('serverAuth:checkUserStatus', () => {
-      return serverAuth.checkUserStatus()
+    ipcMain.handle('serverAuth:checkUserStatus', async () => {
+      return await serverAuth.checkUserStatus()
     })
 
     ipcMain.handle('serverAuth:refreshToken', async () => {
