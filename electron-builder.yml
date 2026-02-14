@@ -48,7 +48,6 @@ nsis:
   license: LICENSE
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
-  artifactName: ${productName}-Setup-${version}.${ext}
 
 # macOS 配置
 mac:
@@ -59,7 +58,6 @@ mac:
         - arm64
   category: public.app-category.productivity
   icon: assets/icon.icns
-  artifactName: ${productName}-${version}-Mac-${arch}.${ext}
   # 未签名应用需要禁用这些选项
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -91,7 +89,6 @@ linux:
         - x64
   category: Office
   icon: assets/icon.png
-  artifactName: ${productName}-${version}-Linux-${arch}.${ext}
   desktop:
     Name: NovaScribe
     Comment: 智能网文创作工具
