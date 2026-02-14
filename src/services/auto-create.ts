@@ -1,6 +1,11 @@
 import { generateText } from './gemini'
 import type { Character, Volume } from '../types'
 import { buildCompressedContext } from './outline-optimizer'
+import {
+  buildDeceasedWarning,
+  buildCharacterBriefing,
+  getDeceasedCharacters
+} from './character-utils'
 
 interface AutoCreateResult {
   worldSetting: string
@@ -303,23 +308,56 @@ function buildVolumeChaptersPrompt(
 ): string {
   // 构建角色档案信息（包含关系、状态等）
   let characterInfo: string
+  let deceasedWarning: string = ''
+
   if (characterArchives && characterArchives.length > 0) {
-    characterInfo = characterArchives.slice(0, 8).map(c => {
+    // 分离存活和已故角色
+    const activeArchives = characterArchives.filter(c => c.status !== 'deceased')
+    const deceasedArchives = characterArchives.filter(c => c.status === 'deceased')
+
+    // 存活角色信息
+    characterInfo = activeArchives.slice(0, 8).map(c => {
       let info = `${c.name}(${c.role}): ${c.identity}`
-      if (c.status === 'deceased' && c.deathChapter) {
-        info += ` [已故于${c.deathChapter}]`
-      }
       if (c.relationships && c.relationships.length > 0) {
         const rels = c.relationships.slice(0, 3).map(r => `${r.targetName}:${r.relation}`).join('、')
         info += ` 【关系：${rels}】`
       }
       return info
     }).join('\n')
+
+    // 构建已故角色警告
+    if (deceasedArchives.length > 0) {
+      deceasedWarning = '\n\n【🚨 已故角色 - 禁止安排出场】\n'
+      deceasedWarning += deceasedArchives.map(c => {
+        let info = `• ${c.name}`
+        if (c.deathChapter) {
+          info += `（死于：${c.deathChapter}）`
+        }
+        return info
+      }).join('\n')
+      deceasedWarning += '\n⚠️ 大纲中不要安排已故角色有任何活动或对话！'
+    }
   } else {
-    characterInfo = characters
+    // 使用基础角色信息
+    const activeChars = characters.filter(c => c.status !== 'deceased')
+    const deceasedChars = characters.filter(c => c.status === 'deceased')
+
+    characterInfo = activeChars
       .slice(0, 5)
       .map(c => `${c.name}(${c.role}): ${c.identity}`)
       .join('\n')
+
+    if (deceasedChars.length > 0) {
+      deceasedWarning = '\n\n【🚨 已故角色 - 禁止安排出场】\n'
+      deceasedWarning += deceasedChars.map(c => {
+        let info = `• ${c.name}`
+        if (c.deathChapter) {
+          info += `（死于：${c.deathChapter}）`
+        }
+        return info
+      }).join('\n')
+      deceasedWarning += '\n⚠️ 大纲中不要安排已故角色有任何活动或对话！'
+    }
   }
 
   const endChapterNumber = startChapterNumber + chapterCount - 1
@@ -416,7 +454,7 @@ function buildVolumeChaptersPrompt(
 ${worldSetting.slice(0, 800)}
 
 【角色档案】
-${characterInfo}
+${characterInfo}${deceasedWarning}
 
 【当前卷信息】
 - 卷号：第${volumeIndex}卷（共${totalVolumes}卷）
@@ -968,22 +1006,37 @@ export async function generateChaptersOneByOne(
  */
 export async function generateChapterContent(
   worldSetting: string,
-  characters: { name: string; description: string }[],
+  characters: { name: string; description: string; status?: string; deathChapter?: string }[],
   chapterOutline: string,
   previousContent: string,
   styles: string[]
 ): Promise<string> {
-  const characterInfo = characters
+  // 分离存活和已故角色
+  const activeChars = characters.filter(c => c.status !== 'deceased')
+  const deceasedChars = characters.filter(c => c.status === 'deceased')
+
+  const characterInfo = activeChars
     .map(c => `${c.name}：${c.description.slice(0, 100)}`)
     .join('\n')
+
+  // 构建已故角色警告
+  let deceasedSection = ''
+  if (deceasedChars.length > 0) {
+    deceasedSection = `
+
+【🚨 已故角色 - 绝对禁止出场】
+以下角色已死亡，在本章中绝对不能让他们说话、出现或有任何活动：
+${deceasedChars.map(c => `- ${c.name}${c.deathChapter ? `（死于：${c.deathChapter}）` : ''}`).join('\n')}
+⚠️ 可以通过回忆、他人提及等方式间接涉及，但禁止直接出场！`
+  }
 
   const prompt = `你是一个专业的网文作家。
 
 【世界观设定】
 ${worldSetting.slice(0, 1000)}
 
-【主要人物】
-${characterInfo}
+【主要人物（存活）】
+${characterInfo}${deceasedSection}
 
 【本章大纲】
 ${chapterOutline}
@@ -1002,6 +1055,7 @@ ${styles.join('、') || '现代轻快、画面感强'}
 3. 情节紧凑，避免大段心理描写
 4. 对话要符合人物性格
 5. 避免降智打脸、无脑送人头等网文毒点
+6. 严格遵守角色生死状态，已故角色禁止出场
 
 请直接输出正文内容，不要包含任何元信息或解释。`
 

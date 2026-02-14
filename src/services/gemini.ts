@@ -613,6 +613,64 @@ export async function findAvailableModel(): Promise<{
 }
 
 /**
+ * 快速分析单章内容，检测角色死亡事件
+ * 用于保存章节后立即调用，更新角色状态
+ * @returns 死亡角色列表及死亡描述
+ */
+export async function analyzeChapterForDeaths(
+  chapterTitle: string,
+  chapterContent: string,
+  characterNames: string[]
+): Promise<{
+  deaths: { name: string; description: string }[]
+  confidence: 'high' | 'medium' | 'low'
+}> {
+  if (!model) {
+    throw new Error('Gemini API 未初始化')
+  }
+
+  if (characterNames.length === 0 || !chapterContent) {
+    return { deaths: [], confidence: 'low' }
+  }
+
+  const names = characterNames.join('、')
+  // 只截取关键部分以节约token
+  const content = chapterContent.slice(0, 4000)
+
+  const prompt = `分析以下章节，检测是否有角色死亡。
+
+章节：${chapterTitle}
+已知角色：${names}
+内容：${content}
+
+只检测明确的死亡事件，不包括：
+- 假死、诈死
+- 回忆中的死亡
+- 可能的危险但未确认死亡
+
+返回JSON：{"deaths":[{"name":"角色名","description":"死亡方式简述"}],"confidence":"high/medium/low"}
+如果没有死亡事件，返回：{"deaths":[],"confidence":"low"}`
+
+  try {
+    const result = await model.generateContent(prompt)
+    const response = await result.response
+    const text = response.text()
+
+    let jsonStr = text.trim()
+    const match = jsonStr.match(/\{[\s\S]*\}/)
+    if (match) jsonStr = match[0]
+    const data = JSON.parse(jsonStr)
+
+    return {
+      deaths: data.deaths || [],
+      confidence: data.confidence || 'low'
+    }
+  } catch {
+    return { deaths: [], confidence: 'low' }
+  }
+}
+
+/**
  * 分析章节内容，更新角色档案（生死、出场、关系）
  * 节约token版：精简提示词
  */

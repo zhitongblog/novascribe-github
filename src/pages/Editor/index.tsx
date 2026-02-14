@@ -35,7 +35,13 @@ import type { DataNode } from 'antd/es/tree'
 import RichEditor from '../../components/RichEditor'
 import { useProjectStore } from '../../stores/project'
 import { useEditorStore } from '../../stores/editor'
-import { isGeminiReady, initGemini, analyzeAllChaptersForArchive } from '../../services/gemini'
+import { isGeminiReady, initGemini, analyzeAllChaptersForArchive, analyzeChapterForDeaths } from '../../services/gemini'
+import {
+  quickAnalyzeDeaths,
+  detectDeceasedInContent,
+  formatViolationWarning,
+  buildDeathConfirmationPrompt
+} from '../../services/character-utils'
 import {
   writeChapterStrict,
   autoWriteAll,
@@ -288,6 +294,7 @@ function Editor() {
   }
 
   // 保存当前章节 - 将HTML转换为TXT格式保存
+  // 方案一：保存后自动分析角色死亡
   const saveCurrentChapter = useCallback(async () => {
     if (!currentChapter || !isModified) return
 
@@ -300,12 +307,81 @@ function Editor() {
       // 保持编辑器中的HTML格式不变，只标记为已保存
       setModified(false)
       message.success('保存成功')
+
+      // 方案一：保存后自动分析角色死亡事件
+      if (formattedContent && characters.length > 0) {
+        const characterNames = characters.map(c => c.name)
+        // 先用本地快速分析检测
+        const quickResult = quickAnalyzeDeaths(formattedContent, characterNames)
+
+        if (quickResult.potentialDeaths.length > 0 && quickResult.confidence !== 'low') {
+          // 有可能的死亡事件，提示用户确认
+          const confirmMessage = buildDeathConfirmationPrompt(quickResult.potentialDeaths, currentChapter.title)
+
+          Modal.confirm({
+            title: '检测到角色死亡事件',
+            content: (
+              <div className="whitespace-pre-wrap text-dark-muted">
+                {confirmMessage}
+              </div>
+            ),
+            okText: '标记为已故',
+            cancelText: '取消',
+            onOk: async () => {
+              // 调用API进行更精确的分析
+              try {
+                const apiResult = await analyzeChapterForDeaths(
+                  currentChapter.title,
+                  formattedContent,
+                  characterNames
+                )
+
+                if (apiResult.deaths.length > 0) {
+                  // 更新角色状态
+                  for (const death of apiResult.deaths) {
+                    const character = characters.find(c => c.name === death.name)
+                    if (character && character.status !== 'deceased') {
+                      await updateCharacter(character.id, {
+                        status: 'deceased',
+                        deathChapter: currentChapter.title
+                      })
+                    }
+                  }
+
+                  // 重新加载角色
+                  if (projectId) {
+                    await loadCharacters(projectId)
+                  }
+
+                  message.success(`已将 ${apiResult.deaths.length} 个角色标记为已故`)
+                }
+              } catch (err) {
+                console.error('分析角色死亡失败:', err)
+                // 即使API失败，也允许手动标记
+                for (const name of quickResult.potentialDeaths) {
+                  const character = characters.find(c => c.name === name)
+                  if (character && character.status !== 'deceased') {
+                    await updateCharacter(character.id, {
+                      status: 'deceased',
+                      deathChapter: currentChapter.title
+                    })
+                  }
+                }
+                if (projectId) {
+                  await loadCharacters(projectId)
+                }
+                message.success('已标记角色为已故')
+              }
+            }
+          })
+        }
+      }
     } catch (error) {
       message.error('保存失败')
     } finally {
       setSaving(false)
     }
-  }, [currentChapter, content, isModified, updateChapter, setSaving, setLastSavedAt, setModified])
+  }, [currentChapter, content, isModified, updateChapter, setSaving, setLastSavedAt, setModified, characters, updateCharacter, loadCharacters, projectId])
 
   // 快捷键保存
   useEffect(() => {
@@ -520,10 +596,30 @@ function Editor() {
       )
 
       message.destroy()
+
+      // 方案二：生成后校验 - 检测是否有已故角色出场
+      const validationResult = detectDeceasedInContent(generatedContent, characters)
+      if (validationResult.hasViolation) {
+        const warningMessage = formatViolationWarning(validationResult.violations)
+        Modal.warning({
+          title: '⚠️ 检测到已故角色出场',
+          content: (
+            <div className="whitespace-pre-wrap text-dark-muted max-h-64 overflow-y-auto">
+              {warningMessage}
+            </div>
+          ),
+          okText: '我知道了',
+          width: 500
+        })
+      }
+
       // 转换为HTML格式在编辑器中显示
       setContent(formatToHtml(generatedContent))
       setModified(true)
-      message.success('AI 写作完成，请检查后保存')
+      message.success(validationResult.hasViolation
+        ? 'AI 写作完成，但检测到已故角色出场，请检查修改'
+        : 'AI 写作完成，请检查后保存'
+      )
     } catch (error: any) {
       message.destroy()
       message.error(error.message || 'AI 写作失败')
