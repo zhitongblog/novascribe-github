@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Input, Button, Radio, Checkbox, message, Spin, Steps, Progress } from 'antd'
+import { Card, Input, Button, Radio, Checkbox, message, Spin, Steps, Progress, Tag } from 'antd'
 import {
   RocketOutlined,
   BulbOutlined,
@@ -9,10 +9,11 @@ import {
   TeamOutlined,
   OrderedListOutlined,
   CheckCircleOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  UserOutlined
 } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
-import { SCALE_OPTIONS, GENRE_CATEGORIES, STYLE_CATEGORIES } from '../../types'
+import { SCALE_OPTIONS, GENRE_CATEGORIES, getAuthorsForGenres } from '../../types'
 import { autoCreateNovel } from '../../services/auto-create'
 import { isGeminiReady, initGemini, generateBookTitle } from '../../services/gemini'
 import { ErrorPage, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
@@ -44,8 +45,14 @@ function Home() {
     constraints: '',
     scale: 'micro' as 'micro' | 'million',
     genres: [] as string[],
-    styles: [] as string[]
+    styles: [] as string[],
+    selectedAuthors: [] as string[]  // 选中的参考作者
   })
+
+  // 根据选中的题材获取推荐作者
+  const recommendedAuthors = useMemo(() => {
+    return getAuthorsForGenres(formData.genres)
+  }, [formData.genres])
 
   // 书名生成状态
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
@@ -92,11 +99,32 @@ function Home() {
   }
 
   const handleGenreChange = (checkedValues: CheckboxValueType[]) => {
-    setFormData({ ...formData, genres: checkedValues as string[] })
+    // 题材改变时，清空已选作者（因为推荐作者会变化）
+    setFormData({ ...formData, genres: checkedValues as string[], selectedAuthors: [], styles: [] })
   }
 
-  const handleStyleChange = (checkedValues: CheckboxValueType[]) => {
-    setFormData({ ...formData, styles: checkedValues as string[] })
+  // 选择/取消选择作者
+  const handleAuthorSelect = (authorName: string, authorStyle: string) => {
+    const currentSelected = formData.selectedAuthors
+    const currentStyles = formData.styles
+
+    if (currentSelected.includes(authorName)) {
+      // 取消选择
+      setFormData({
+        ...formData,
+        selectedAuthors: currentSelected.filter(a => a !== authorName),
+        styles: currentStyles.filter(s => s !== authorStyle)
+      })
+    } else if (currentSelected.length < 2) {
+      // 最多选择2位作者
+      setFormData({
+        ...formData,
+        selectedAuthors: [...currentSelected, authorName],
+        styles: [...currentStyles, authorStyle]
+      })
+    } else {
+      message.warning('最多选择2位参考作者')
+    }
   }
 
   const handleSubmit = async () => {
@@ -489,35 +517,62 @@ function Home() {
             </Checkbox.Group>
           </div>
 
-          {/* 写作风格 */}
+          {/* 写作风格 - 作者参考 */}
           <div className="mb-6">
-            <label className="block text-dark-text mb-3 font-medium">写作风格</label>
-            <Checkbox.Group
-              value={formData.styles}
-              onChange={handleStyleChange}
-              className="w-full"
-            >
-              <div className="space-y-3">
-                {Object.entries(STYLE_CATEGORIES).map(([category, styles]) => (
-                  <div key={category}>
-                    <span className="text-dark-muted text-xs mb-1 block">{category}</span>
-                    <div className="flex flex-wrap gap-2">
-                      {styles.map((style) => (
-                        <label
-                          key={style}
-                          className={`genre-tag ${
-                            formData.styles.includes(style) ? 'selected' : ''
-                          }`}
-                        >
-                          <Checkbox value={style} className="hidden" />
-                          {style}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+            <label className="block text-dark-text mb-2 font-medium">
+              <UserOutlined className="mr-2" />
+              写作风格参考
+            </label>
+            <p className="text-dark-muted text-xs mb-3">
+              根据所选题材推荐知名作者，选择1-2位作为风格参考（AI会学习其写作风格）
+            </p>
+
+            {formData.genres.length === 0 ? (
+              <div className="text-center py-8 text-dark-muted">
+                <UserOutlined className="text-3xl mb-2 block opacity-50" />
+                <p>请先选择题材标签，系统将推荐相关作者</p>
               </div>
-            </Checkbox.Group>
+            ) : recommendedAuthors.length === 0 ? (
+              <div className="text-center py-8 text-dark-muted">
+                <p>暂无该题材的推荐作者</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {recommendedAuthors.map((author) => {
+                  const isSelected = formData.selectedAuthors.includes(author.name)
+                  return (
+                    <div
+                      key={author.name}
+                      onClick={() => handleAuthorSelect(author.name, author.style)}
+                      className={`p-3 rounded-lg cursor-pointer transition-all border ${
+                        isSelected
+                          ? 'border-primary-500 bg-primary-500/20'
+                          : 'border-dark-border bg-dark-bg hover:border-primary-500/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <span className={`font-medium ${isSelected ? 'text-primary-400' : 'text-dark-text'}`}>
+                          {author.name}
+                        </span>
+                        {isSelected && (
+                          <Tag color="blue" className="text-xs">已选</Tag>
+                        )}
+                      </div>
+                      <p className="text-dark-muted text-xs mb-1">{author.style}</p>
+                      <p className="text-dark-muted text-xs opacity-70">代表作：{author.works}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {formData.selectedAuthors.length > 0 && (
+              <div className="mt-3 p-3 bg-primary-500/10 rounded-lg">
+                <span className="text-primary-400 text-sm">
+                  已选风格参考：{formData.selectedAuthors.join('、')}
+                </span>
+              </div>
+            )}
           </div>
         </Card>
 

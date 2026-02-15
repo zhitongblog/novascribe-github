@@ -10,7 +10,7 @@ import {
 const { Title, Text, Paragraph, Link } = Typography
 
 // 从 package.json 获取版本号
-const APP_VERSION = '1.0.8'
+const APP_VERSION = '1.0.9'
 
 function About() {
   const handleCopyEmail = () => {
@@ -133,7 +133,8 @@ function About() {
               <img
                 src="https://storyglint.com/weipay.jpg"
                 alt="微信支付"
-                className="w-48 h-48 rounded-lg"
+                className="rounded-lg"
+                style={{ maxWidth: '280px', height: 'auto' }}
                 onError={(e) => {
                   // 如果在线图片加载失败，显示提示
                   const target = e.target as HTMLImageElement
