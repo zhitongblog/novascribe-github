@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Modal, Button, Slider, Tooltip, Space, Drawer, List, Typography } from 'antd'
+import { Button, Slider, Tooltip, Drawer, List, Typography, Segmented } from 'antd'
 import {
   CloseOutlined,
   LeftOutlined,
@@ -7,7 +7,9 @@ import {
   MenuOutlined,
   FontSizeOutlined,
   FullscreenOutlined,
-  FullscreenExitOutlined
+  FullscreenExitOutlined,
+  BgColorsOutlined,
+  ReadOutlined
 } from '@ant-design/icons'
 import type { Chapter, Volume } from '../../types'
 
@@ -21,6 +23,15 @@ interface ReadingModeProps {
   volumes: Volume[]
   onChapterChange: (chapter: Chapter) => void
 }
+
+// 背景色主题配置
+const THEME_OPTIONS = [
+  { key: 'dark', label: '夜间', bg: '#0f0f1a', text: '#d0d0d0', title: '#e0e0e0' },
+  { key: 'sepia', label: '羊皮纸', bg: '#f4ecd8', text: '#5b4636', title: '#3d2914' },
+  { key: 'green', label: '护眼绿', bg: '#cce8cf', text: '#2d4a32', title: '#1a3d1f' },
+  { key: 'light', label: '日间', bg: '#ffffff', text: '#333333', title: '#000000' },
+  { key: 'gray', label: '灰色', bg: '#e8e8e8', text: '#444444', title: '#222222' }
+]
 
 // 将HTML内容转换为纯文本并保持段落格式
 function htmlToReadableText(html: string): string {
@@ -56,7 +67,27 @@ function ReadingMode({
   const [fontSize, setFontSize] = useState(18)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showChapterList, setShowChapterList] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [readingProgress, setReadingProgress] = useState(0)
+  const [theme, setTheme] = useState<string>('dark')
+  const [dualPage, setDualPage] = useState(false)
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+
+  // 获取当前主题配置
+  const currentTheme = THEME_OPTIONS.find(t => t.key === theme) || THEME_OPTIONS[0]
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth)
+      // 宽屏自动启用双栏模式（屏幕宽度 >= 1400px）
+      if (window.innerWidth >= 1400 && !dualPage) {
+        // 不自动开启，让用户手动选择
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [dualPage])
 
   // 获取排序后的所有章节
   const getSortedChapters = useCallback(() => {
@@ -109,6 +140,20 @@ function ReadingMode({
     }
   }, [getSortedChapters, getCurrentIndex, onChapterChange])
 
+  // 退出阅读模式
+  const handleClose = useCallback(() => {
+    // 如果是全屏模式，先退出全屏
+    if (document.fullscreenElement) {
+      document.exitFullscreen().then(() => {
+        onClose()
+      }).catch(() => {
+        onClose()
+      })
+    } else {
+      onClose()
+    }
+  }, [onClose])
+
   // 键盘快捷键
   useEffect(() => {
     if (!visible) return
@@ -122,13 +167,14 @@ function ReadingMode({
         handleNextChapter()
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        e.stopPropagation()
+        handleClose()
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [visible, handlePrevChapter, handleNextChapter, onClose])
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [visible, handlePrevChapter, handleNextChapter, handleClose])
 
   // 监听滚动计算阅读进度
   useEffect(() => {
@@ -183,160 +229,200 @@ function ReadingMode({
         .sort((a, b) => a.order - b.order)
     }))
 
-  if (!currentChapter) return null
+  // 如果不可见或没有章节，不渲染
+  if (!visible || !currentChapter) return null
 
   const content = htmlToReadableText(currentChapter.content || '')
+  const paragraphs = content.split('\n\n').filter(p => p.trim())
+
+  // 双栏模式下分割段落
+  const canUseDualPage = windowWidth >= 1200
+  const midPoint = Math.ceil(paragraphs.length / 2)
+  const leftParagraphs = dualPage && canUseDualPage ? paragraphs.slice(0, midPoint) : paragraphs
+  const rightParagraphs = dualPage && canUseDualPage ? paragraphs.slice(midPoint) : []
+
+  // 工具栏背景色（根据主题调整）
+  const toolbarBg = theme === 'dark' ? '#16213e' : theme === 'light' ? '#f0f0f0' : theme === 'sepia' ? '#e8dcc8' : theme === 'green' ? '#b8d9bb' : '#d8d8d8'
+  const toolbarBorder = theme === 'dark' ? '#0f3460' : '#cccccc'
+  const toolbarText = theme === 'dark' ? '#9ca3af' : '#666666'
 
   return (
-    <Modal
-      open={visible}
-      onCancel={onClose}
-      footer={null}
-      width="100%"
-      style={{ top: 0, padding: 0, maxWidth: '100vw' }}
-      styles={{
-        body: { padding: 0, height: '100vh', overflow: 'hidden' },
-        content: { borderRadius: 0, height: '100vh' }
-      }}
-      closeIcon={null}
-      className="reading-mode-modal"
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: currentTheme.bg }}
     >
-      <div className="h-full flex flex-col" style={{ background: '#1a1a2e' }}>
-        {/* 顶部工具栏 */}
-        <div
-          className="flex items-center justify-between px-4 py-2 border-b"
-          style={{ background: '#16213e', borderColor: '#0f3460' }}
-        >
-          <div className="flex items-center gap-4">
-            <Tooltip title="退出阅读模式 (Esc)">
-              <Button
-                type="text"
-                icon={<CloseOutlined />}
-                onClick={onClose}
-                className="text-gray-400 hover:text-white"
-              />
-            </Tooltip>
-            <Tooltip title="章节目录">
-              <Button
-                type="text"
-                icon={<MenuOutlined />}
-                onClick={() => setShowChapterList(true)}
-                className="text-gray-400 hover:text-white"
-              />
-            </Tooltip>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Text className="text-gray-300">
-              {currentVolume?.title} · 第{getGlobalChapterNumber(currentChapter)}章 {currentChapter.title}
-            </Text>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Tooltip title="字体大小">
-              <Space>
-                <FontSizeOutlined className="text-gray-400" />
-                <Slider
-                  min={14}
-                  max={28}
-                  value={fontSize}
-                  onChange={setFontSize}
-                  style={{ width: 100 }}
-                />
-                <span className="text-gray-400 text-sm w-8">{fontSize}</span>
-              </Space>
-            </Tooltip>
-            <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
-              <Button
-                type="text"
-                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-                onClick={toggleFullscreen}
-                className="text-gray-400 hover:text-white"
-              />
-            </Tooltip>
-          </div>
+      {/* 顶部工具栏 */}
+      <div
+        className="flex items-center justify-between px-4 py-2 border-b"
+        style={{ background: toolbarBg, borderColor: toolbarBorder }}
+      >
+        <div className="flex items-center gap-4">
+          <Tooltip title="退出阅读模式 (Esc)">
+            <Button
+              type="text"
+              icon={<CloseOutlined />}
+              onClick={handleClose}
+              style={{ color: toolbarText }}
+              className="hover:opacity-80"
+            />
+          </Tooltip>
+          <Tooltip title="章节目录">
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setShowChapterList(true)}
+              style={{ color: toolbarText }}
+              className="hover:opacity-80"
+            />
+          </Tooltip>
+          <Tooltip title="阅读设置">
+            <Button
+              type="text"
+              icon={<BgColorsOutlined />}
+              onClick={() => setShowSettings(true)}
+              style={{ color: toolbarText }}
+              className="hover:opacity-80"
+            />
+          </Tooltip>
         </div>
 
-        {/* 阅读进度条 */}
-        <div className="h-1 bg-gray-800">
-          <div
-            className="h-full bg-gradient-to-r from-purple-500 to-violet-600 transition-all duration-200"
-            style={{ width: `${readingProgress}%` }}
-          />
+        <div className="flex items-center gap-2">
+          <Text style={{ color: toolbarText }}>
+            {currentVolume?.title} · 第{getGlobalChapterNumber(currentChapter)}章 {currentChapter.title}
+          </Text>
         </div>
 
-        {/* 内容区域 */}
+        <div className="flex items-center gap-2">
+          {canUseDualPage && (
+            <Tooltip title={dualPage ? '单栏模式' : '双栏模式'}>
+              <Button
+                type={dualPage ? 'primary' : 'text'}
+                icon={<ReadOutlined />}
+                onClick={() => setDualPage(!dualPage)}
+                style={{ color: dualPage ? undefined : toolbarText }}
+                className="hover:opacity-80"
+              />
+            </Tooltip>
+          )}
+          <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
+            <Button
+              type="text"
+              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+              onClick={toggleFullscreen}
+              style={{ color: toolbarText }}
+              className="hover:opacity-80"
+            />
+          </Tooltip>
+        </div>
+      </div>
+
+      {/* 阅读进度条 */}
+      <div className="h-1" style={{ background: theme === 'dark' ? '#1f2937' : '#e0e0e0' }}>
         <div
-          id="reading-content-area"
-          className="flex-1 overflow-auto"
-          style={{ background: '#0f0f1a' }}
+          className="h-full bg-gradient-to-r from-purple-500 to-violet-600 transition-all duration-200"
+          style={{ width: `${readingProgress}%` }}
+        />
+      </div>
+
+      {/* 内容区域 */}
+      <div
+        id="reading-content-area"
+        className="flex-1 overflow-auto"
+        style={{ background: currentTheme.bg }}
+      >
+        <div
+          className={`mx-auto px-8 py-12 ${dualPage && canUseDualPage ? 'max-w-6xl' : 'max-w-3xl'}`}
+          style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
         >
-          <div
-            className="max-w-3xl mx-auto px-8 py-12"
-            style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
+          {/* 章节标题 */}
+          <h1
+            className="text-center mb-8 font-bold"
+            style={{ fontSize: `${fontSize + 8}px`, color: currentTheme.title }}
           >
-            {/* 章节标题 */}
-            <h1
-              className="text-center mb-8 font-bold"
-              style={{ fontSize: `${fontSize + 8}px`, color: '#e0e0e0' }}
-            >
-              第{getGlobalChapterNumber(currentChapter)}章 {currentChapter.title}
-            </h1>
+            第{getGlobalChapterNumber(currentChapter)}章 {currentChapter.title}
+          </h1>
 
-            {/* 章节内容 */}
-            {content ? (
-              <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">
-                {content.split('\n\n').map((paragraph, index) => (
+          {/* 章节内容 */}
+          {content ? (
+            dualPage && canUseDualPage ? (
+              // 双栏模式
+              <div className="flex gap-12">
+                <div className="flex-1" style={{ color: currentTheme.text }}>
+                  {leftParagraphs.map((paragraph, index) => (
+                    <p key={index} className="mb-6 indent-8">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+                <div
+                  className="w-px"
+                  style={{ background: theme === 'dark' ? '#333' : '#ddd' }}
+                />
+                <div className="flex-1" style={{ color: currentTheme.text }}>
+                  {rightParagraphs.map((paragraph, index) => (
+                    <p key={index} className="mb-6 indent-8">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              // 单栏模式
+              <div style={{ color: currentTheme.text }}>
+                {paragraphs.map((paragraph, index) => (
                   <p key={index} className="mb-6 indent-8">
                     {paragraph}
                   </p>
                 ))}
               </div>
-            ) : (
-              <div className="text-center text-gray-500 py-20">
-                本章暂无内容
-              </div>
-            )}
-
-            {/* 章节信息 */}
-            <div className="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
-              本章共 {currentChapter.wordCount || 0} 字
+            )
+          ) : (
+            <div className="text-center py-20" style={{ color: toolbarText }}>
+              本章暂无内容
             </div>
+          )}
+
+          {/* 章节信息 */}
+          <div
+            className="mt-16 pt-8 border-t text-center text-sm"
+            style={{ borderColor: theme === 'dark' ? '#333' : '#ddd', color: toolbarText }}
+          >
+            本章共 {currentChapter.wordCount || 0} 字
           </div>
         </div>
+      </div>
 
-        {/* 底部导航 */}
-        <div
-          className="flex items-center justify-between px-8 py-4 border-t"
-          style={{ background: '#16213e', borderColor: '#0f3460' }}
+      {/* 底部导航 */}
+      <div
+        className="flex items-center justify-between px-8 py-4 border-t"
+        style={{ background: toolbarBg, borderColor: toolbarBorder }}
+      >
+        <Button
+          type="primary"
+          icon={<LeftOutlined />}
+          onClick={handlePrevChapter}
+          disabled={!hasPrev}
+          size="large"
         >
-          <Button
-            type="primary"
-            icon={<LeftOutlined />}
-            onClick={handlePrevChapter}
-            disabled={!hasPrev}
-            size="large"
-          >
-            上一章
-          </Button>
+          上一章
+        </Button>
 
-          <div className="text-gray-400 text-sm">
-            {currentIndex + 1} / {sortedChapters.length}
-            <span className="mx-2">·</span>
-            使用 ← → 键或 PageUp/PageDown 翻页
-          </div>
-
-          <Button
-            type="primary"
-            icon={<RightOutlined />}
-            onClick={handleNextChapter}
-            disabled={!hasNext}
-            size="large"
-            iconPosition="end"
-          >
-            下一章
-          </Button>
+        <div style={{ color: toolbarText }} className="text-sm">
+          {currentIndex + 1} / {sortedChapters.length}
+          <span className="mx-2">·</span>
+          使用 ← → 键或 PageUp/PageDown 翻页
         </div>
+
+        <Button
+          type="primary"
+          icon={<RightOutlined />}
+          onClick={handleNextChapter}
+          disabled={!hasNext}
+          size="large"
+          iconPosition="end"
+        >
+          下一章
+        </Button>
       </div>
 
       {/* 章节目录抽屉 */}
@@ -393,7 +479,95 @@ function ReadingMode({
           ))}
         </div>
       </Drawer>
-    </Modal>
+
+      {/* 阅读设置抽屉 */}
+      <Drawer
+        title="阅读设置"
+        placement="right"
+        onClose={() => setShowSettings(false)}
+        open={showSettings}
+        width={320}
+        styles={{
+          body: { background: '#16213e' },
+          header: { background: '#16213e', borderBottom: '1px solid #0f3460', color: '#fff' }
+        }}
+      >
+        <div className="space-y-6">
+          {/* 字体大小 */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 text-gray-300">
+              <FontSizeOutlined />
+              <span>字体大小</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-gray-500 text-sm">小</span>
+              <Slider
+                min={14}
+                max={32}
+                value={fontSize}
+                onChange={setFontSize}
+                className="flex-1"
+              />
+              <span className="text-gray-500 text-sm">大</span>
+            </div>
+            <div className="text-center text-gray-400 mt-2">{fontSize}px</div>
+          </div>
+
+          {/* 背景颜色 */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 text-gray-300">
+              <BgColorsOutlined />
+              <span>背景颜色</span>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {THEME_OPTIONS.map(t => (
+                <Tooltip key={t.key} title={t.label}>
+                  <div
+                    className={`w-12 h-12 rounded-lg cursor-pointer border-2 transition-all ${
+                      theme === t.key ? 'border-purple-500 scale-110' : 'border-transparent'
+                    }`}
+                    style={{ background: t.bg }}
+                    onClick={() => setTheme(t.key)}
+                  />
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+
+          {/* 阅读模式 */}
+          {canUseDualPage && (
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-gray-300">
+                <ReadOutlined />
+                <span>阅读模式</span>
+              </div>
+              <Segmented
+                block
+                value={dualPage ? 'dual' : 'single'}
+                onChange={(val) => setDualPage(val === 'dual')}
+                options={[
+                  { label: '单栏', value: 'single' },
+                  { label: '双栏', value: 'dual' }
+                ]}
+              />
+              <div className="text-gray-500 text-xs mt-2">
+                屏幕宽度 ≥ 1200px 时可使用双栏模式
+              </div>
+            </div>
+          )}
+
+          {/* 快捷键说明 */}
+          <div className="pt-4 border-t border-gray-700">
+            <div className="text-gray-400 text-sm mb-2">快捷键</div>
+            <div className="space-y-1 text-gray-500 text-xs">
+              <div>← / PageUp：上一章</div>
+              <div>→ / PageDown：下一章</div>
+              <div>Esc：退出阅读模式</div>
+            </div>
+          </div>
+        </div>
+      </Drawer>
+    </div>
   )
 }
 
