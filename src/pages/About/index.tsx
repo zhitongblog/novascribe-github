@@ -129,12 +129,18 @@ function About() {
               欢迎请作者喝杯咖啡，您的支持是我持续更新的动力！
             </Paragraph>
 
-            <div className="mt-6 p-4 bg-white rounded-lg shadow-lg" style={{ display: 'inline-block' }}>
+            <div className="mt-6 p-4 bg-white rounded-lg shadow-lg" style={{ display: 'inline-block', maxWidth: 'none' }}>
               <img
                 src="https://storyglint.com/weipay.jpg"
                 alt="微信支付"
-                className="rounded-lg block"
-                style={{ width: 'auto', height: 'auto', maxWidth: 'none' }}
+                className="rounded-lg"
+                style={{
+                  display: 'block',
+                  width: '300px',
+                  height: 'auto',
+                  maxWidth: 'none',
+                  objectFit: 'contain'
+                }}
                 onError={(e) => {
                   // 如果在线图片加载失败，显示提示
                   const target = e.target as HTMLImageElement

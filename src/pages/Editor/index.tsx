@@ -859,6 +859,7 @@ function Editor() {
   }
 
   return (
+    <>
     <Layout className="h-full">
       {/* 左侧章节树 */}
       <Sider
@@ -1125,17 +1126,18 @@ function Editor() {
         </div>
       </Modal>
 
-      {/* 阅读模式 */}
-      <ReadingMode
-        visible={isReadingMode}
-        onClose={() => setIsReadingMode(false)}
-        currentChapter={currentChapter}
-        chapters={chapters}
-        volumes={volumes}
-        onChapterChange={(chapter) => setCurrentChapter(chapter)}
-      />
-
     </Layout>
+
+    {/* 阅读模式 - 放在 Layout 外面确保正确覆盖 */}
+    <ReadingMode
+      visible={isReadingMode}
+      onClose={() => setIsReadingMode(false)}
+      currentChapter={currentChapter}
+      chapters={chapters}
+      volumes={volumes}
+      onChapterChange={(chapter) => setCurrentChapter(chapter)}
+    />
+    </>
   )
 }
 

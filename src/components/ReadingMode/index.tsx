@@ -142,14 +142,18 @@ function ReadingMode({
 
   // 退出阅读模式
   const handleClose = useCallback(() => {
+    console.log('ReadingMode: handleClose called')
     // 如果是全屏模式，先退出全屏
     if (document.fullscreenElement) {
       document.exitFullscreen().then(() => {
+        console.log('ReadingMode: exited fullscreen, calling onClose')
         onClose()
-      }).catch(() => {
+      }).catch((err) => {
+        console.log('ReadingMode: fullscreen exit failed, calling onClose anyway', err)
         onClose()
       })
     } else {
+      console.log('ReadingMode: not in fullscreen, calling onClose directly')
       onClose()
     }
   }, [onClose])
@@ -248,8 +252,8 @@ function ReadingMode({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col"
-      style={{ background: currentTheme.bg }}
+      className="fixed inset-0 flex flex-col"
+      style={{ background: currentTheme.bg, zIndex: 9999 }}
     >
       {/* 顶部工具栏 */}
       <div
