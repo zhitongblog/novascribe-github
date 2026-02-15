@@ -1,11 +1,6 @@
 import { generateText } from './gemini'
 import type { Character, Volume } from '../types'
 import { buildCompressedContext } from './outline-optimizer'
-import {
-  buildDeceasedWarning,
-  buildCharacterBriefing,
-  getDeceasedCharacters
-} from './character-utils'
 
 interface AutoCreateResult {
   worldSetting: string
