@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>关于 - NovaScribe</title>
+  <meta name="description" content="关于 NovaScribe 智能网文创作工具">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f8f9fa;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* 头部 */
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 60px 0;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    header .subtitle {
+      font-size: 1.2rem;
+      opacity: 0.9;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 20px;
+      color: white;
+      text-decoration: none;
+      padding: 10px 25px;
+      border: 2px solid white;
+      border-radius: 25px;
+      transition: all 0.3s;
+    }
+
+    .back-link:hover {
+      background: white;
+      color: #667eea;
+    }
+
+    /* 主内容 */
+    main {
+      padding: 60px 0;
+    }
+
+    .about-section {
+      background: white;
+      border-radius: 15px;
+      padding: 40px;
+      margin-bottom: 30px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+    }
+
+    .about-section h2 {
+      font-size: 1.8rem;
+      color: #2c3e50;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #667eea;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 25px;
+    }
+
+    .info-item {
+      text-align: center;
+      padding: 25px;
+      background: #f8f9fa;
+      border-radius: 12px;
+    }
+
+    .info-item .label {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .info-item .value {
+      font-size: 1.3rem;
+      color: #2c3e50;
+      font-weight: 600;
+    }
+
+    .info-item .value a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .info-item .value a:hover {
+      text-decoration: underline;
+    }
+
+    /* 版本信息 */
+    .version-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* 捐赠区域 */
+    .donate-section {
+      text-align: center;
+    }
+
+    .donate-section p {
+      color: #666;
+      margin-bottom: 25px;
+      line-height: 1.8;
+    }
+
+    .qrcode-container {
+      display: inline-block;
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 5px 30px rgba(0,0,0,0.1);
+    }
+
+    .qrcode-container img {
+      width: 250px;
+      height: 250px;
+      border-radius: 10px;
+    }
+
+    .qrcode-label {
+      margin-top: 15px;
+      font-size: 1rem;
+      color: #07c160;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .qrcode-label svg {
+      width: 24px;
+      height: 24px;
+      fill: #07c160;
+    }
+
+    .thank-you {
+      margin-top: 25px;
+      padding: 20px;
+      background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+      border-radius: 10px;
+      color: #856404;
+    }
+
+    /* 功能列表 */
+    .feature-list {
+      list-style: none;
+    }
+
+    .feature-list li {
+      padding: 12px 0;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .feature-list li:last-child {
+      border-bottom: none;
+    }
+
+    .feature-list li::before {
+      content: "✓";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 50%;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    /* 页脚 */
+    footer {
+      background: #2c3e50;
+      color: white;
+      padding: 30px 0;
+      text-align: center;
+    }
+
+    footer p {
+      opacity: 0.8;
+    }
+
+    footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+      header h1 {
+        font-size: 2rem;
+      }
+
+      .about-section {
+        padding: 25px;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .qrcode-container img {
+        width: 200px;
+        height: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>关于 NovaScribe</h1>
+      <p class="subtitle">智能网文创作工具</p>
+      <a href="/" class="back-link">返回首页</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <!-- 基本信息 -->
+      <section class="about-section">
+        <h2>软件信息</h2>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="label">当前版本</div>
+            <div class="value">
+              <span class="version-badge">v1.0.6</span>
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="label">作者</div>
+            <div class="value">智通</div>
+          </div>
+          <div class="info-item">
+            <div class="label">联系邮箱</div>
+            <div class="value">
+              <a href="mailto:lixd220@gmail.com">lixd220@gmail.com</a>
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="label">开源地址</div>
+            <div class="value">
+              <a href="https://github.com/zhitongblog/novascribe-github" target="_blank">GitHub</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 功能介绍 -->
+      <section class="about-section">
+        <h2>主要功能</h2>
+        <ul class="feature-list">
+          <li>AI 辅助创作 - 集成 Google Gemini，智能生成大纲和正文</li>
+          <li>云端同步 - 作品自动备份到云端，多设备无缝切换</li>
+          <li>角色管理 - 详细的角色档案，自动追踪角色状态</li>
+          <li>章节管理 - 多卷多章节结构，自动统计字数</li>
+          <li>角色死亡防控 - 自动检测并防止已故角色"复活"</li>
+          <li>一键导出 - 支持导出为 TXT 文件，方便投稿</li>
+          <li>深色模式 - 护眼的深色界面，沉浸式写作体验</li>
+        </ul>
+      </section>
+
+      <!-- 捐赠支持 -->
+      <section class="about-section donate-section">
+        <h2>支持作者</h2>
+        <p>
+          NovaScribe 是一款免费开源的软件，如果它对您的创作有所帮助，<br>
+          欢迎请作者喝杯咖啡，您的支持是我持续更新的动力！
+        </p>
+
+        <div class="qrcode-container">
+          <img src="/weipay.jpg" alt="微信支付">
+          <div class="qrcode-label">
+            <svg viewBox="0 0 24 24">
+              <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18z"/>
+            </svg>
+            微信扫码支持
+          </div>
+        </div>
+
+        <div class="thank-you">
+          感谢每一位支持者！您的鼓励让 NovaScribe 变得更好。
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 NovaScribe. All rights reserved.</p>
+      <p style="margin-top: 10px;">
+        <a href="/">首页</a> |
+        <a href="https://github.com/zhitongblog/novascribe-github" target="_blank">GitHub</a> |
+        <a href="mailto:lixd220@gmail.com">联系我们</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
