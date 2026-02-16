@@ -467,6 +467,20 @@ function ReadingMode({
             第{getGlobalChapterNumber(currentChapter)}章 {currentChapter.title}
           </h1>
 
+          {/* 调试信息 - 测试完成后删除 */}
+          <div style={{
+            padding: '8px 16px',
+            marginBottom: '16px',
+            background: 'rgba(255,0,0,0.1)',
+            borderRadius: '4px',
+            fontSize: '12px',
+            color: currentTheme.text
+          }}>
+            调试: 窗口宽度={windowWidth}px | 可用双栏={canUseDualPage ? '是' : '否'} |
+            双栏开启={dualPage ? '是' : '否'} | 段落数={paragraphs.length} |
+            左栏={leftParagraphs.length}段 | 右栏={rightParagraphs.length}段
+          </div>
+
           {/* 章节内容 */}
           {content ? (
             dualPage && canUseDualPage ? (
