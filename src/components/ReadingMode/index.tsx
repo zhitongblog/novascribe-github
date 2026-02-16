@@ -94,6 +94,7 @@ function ReadingMode({
   const [theme, setTheme] = useState<string>('dark')
   const [dualPage, setDualPage] = useState(false)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [currentPageIndex, setCurrentPageIndex] = useState(0) // 当前页码（双页模式下是左页的页码）
 
   // 获取当前主题配置
   const currentTheme = THEME_OPTIONS.find(t => t.key === theme) || THEME_OPTIONS[0]
@@ -271,21 +272,55 @@ function ReadingMode({
   // 双栏模式：屏幕宽度 >= 1200px 时可用
   const canUseDualPage = windowWidth >= 1200
 
-  // 双栏模式下，简单地将段落平分到两栏
-  const splitIndex = Math.ceil(paragraphs.length / 2)
-  const leftParagraphs = dualPage && canUseDualPage ? paragraphs.slice(0, splitIndex) : paragraphs
-  const rightParagraphs = dualPage && canUseDualPage ? paragraphs.slice(splitIndex) : []
+  // 双页模式：将内容分成多页，每页显示固定数量的段落
+  // 估算每页能显示的段落数（根据字体大小和行高估算）
+  const paragraphsPerPage = Math.max(3, Math.floor(15 * (18 / fontSize))) // 基于字体大小调整
+
+  // 将段落分成多页
+  const pages: string[][] = []
+  for (let i = 0; i < paragraphs.length; i += paragraphsPerPage) {
+    pages.push(paragraphs.slice(i, i + paragraphsPerPage))
+  }
+
+  // 确保至少有一页
+  if (pages.length === 0) {
+    pages.push([])
+  }
+
+  // 双页模式下，获取当前显示的左右页
+  const totalPages = pages.length
+  const maxPageIndex = dualPage && canUseDualPage ? Math.max(0, totalPages - 2) : totalPages - 1
+  const safePageIndex = Math.min(currentPageIndex, maxPageIndex)
+
+  const leftPageParagraphs = pages[safePageIndex] || []
+  const rightPageParagraphs = dualPage && canUseDualPage ? (pages[safePageIndex + 1] || []) : []
+
+  // 翻页函数
+  const goToPrevPage = () => {
+    const step = dualPage && canUseDualPage ? 2 : 1
+    setCurrentPageIndex(prev => Math.max(0, prev - step))
+  }
+
+  const goToNextPage = () => {
+    const step = dualPage && canUseDualPage ? 2 : 1
+    setCurrentPageIndex(prev => Math.min(maxPageIndex, prev + step))
+  }
+
+  // 切换章节时重置页码
+  useEffect(() => {
+    setCurrentPageIndex(0)
+  }, [currentChapter?.id])
 
   // 调试日志
-  console.log('[ReadingMode] 双栏模式状态:', {
+  console.log('[ReadingMode] 双页模式状态:', {
     dualPage,
     canUseDualPage,
-    windowWidth,
-    paragraphsCount: paragraphs.length,
-    splitIndex,
-    leftCount: leftParagraphs.length,
-    rightCount: rightParagraphs.length,
-    rawContentPreview: currentChapter.content?.substring(0, 200) // 显示原始内容前200字符
+    totalParagraphs: paragraphs.length,
+    paragraphsPerPage,
+    totalPages,
+    currentPageIndex: safePageIndex,
+    leftPageCount: leftPageParagraphs.length,
+    rightPageCount: rightPageParagraphs.length
   })
 
   // 工具栏背景色（根据主题调整）
@@ -458,19 +493,29 @@ function ReadingMode({
             fontSize: '12px',
             color: currentTheme.text
           }}>
-            调试: 窗口宽度={windowWidth}px | 可用双栏={canUseDualPage ? '是' : '否'} |
-            双栏开启={dualPage ? '是' : '否'} | 段落数={paragraphs.length} |
-            左栏={leftParagraphs.length}段 | 右栏={rightParagraphs.length}段
+            调试: 总段落={paragraphs.length} | 每页段落={paragraphsPerPage} | 总页数={totalPages} |
+            当前页={safePageIndex + 1}/{totalPages} | 双页={dualPage ? '是' : '否'} |
+            左页={leftPageParagraphs.length}段 | 右页={rightPageParagraphs.length}段
           </div>
 
           {/* 章节内容 */}
           {content ? (
             dualPage && canUseDualPage ? (
-              // 双栏模式：左右两栏并排显示
+              // 双页模式：左右两页并排显示，内容连续
               <div style={{ display: 'flex', gap: '48px', alignItems: 'flex-start' }}>
-                {/* 左栏 */}
-                <div style={{ flex: 1, color: currentTheme.text }}>
-                  {leftParagraphs.map((paragraph, index) => (
+                {/* 左页 */}
+                <div style={{ flex: 1, color: currentTheme.text, minHeight: '400px' }}>
+                  <div style={{
+                    textAlign: 'center',
+                    fontSize: '12px',
+                    color: toolbarText,
+                    marginBottom: '16px',
+                    paddingBottom: '8px',
+                    borderBottom: `1px solid ${theme === 'dark' ? '#333' : '#ddd'}`
+                  }}>
+                    第 {safePageIndex + 1} 页
+                  </div>
+                  {leftPageParagraphs.map((paragraph, index) => (
                     <p
                       key={`left-${index}`}
                       style={{
@@ -491,25 +536,50 @@ function ReadingMode({
                     flexShrink: 0
                   }}
                 />
-                {/* 右栏 */}
-                <div style={{ flex: 1, color: currentTheme.text }}>
-                  {rightParagraphs.map((paragraph, index) => (
-                    <p
-                      key={`right-${index}`}
-                      style={{
-                        marginBottom: '24px',
-                        textIndent: '2em'
-                      }}
-                    >
-                      {paragraph}
-                    </p>
-                  ))}
+                {/* 右页 */}
+                <div style={{ flex: 1, color: currentTheme.text, minHeight: '400px' }}>
+                  {rightPageParagraphs.length > 0 ? (
+                    <>
+                      <div style={{
+                        textAlign: 'center',
+                        fontSize: '12px',
+                        color: toolbarText,
+                        marginBottom: '16px',
+                        paddingBottom: '8px',
+                        borderBottom: `1px solid ${theme === 'dark' ? '#333' : '#ddd'}`
+                      }}>
+                        第 {safePageIndex + 2} 页
+                      </div>
+                      {rightPageParagraphs.map((paragraph, index) => (
+                        <p
+                          key={`right-${index}`}
+                          style={{
+                            marginBottom: '24px',
+                            textIndent: '2em'
+                          }}
+                        >
+                          {paragraph}
+                        </p>
+                      ))}
+                    </>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      color: toolbarText,
+                      fontStyle: 'italic'
+                    }}>
+                      本章结束
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
-              // 单栏模式
+              // 单页模式：显示当前页
               <div style={{ color: currentTheme.text }}>
-                {paragraphs.map((paragraph, index) => (
+                {leftPageParagraphs.map((paragraph, index) => (
                   <p
                     key={index}
                     style={{
@@ -525,6 +595,35 @@ function ReadingMode({
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 0', color: toolbarText }}>
               本章暂无内容
+            </div>
+          )}
+
+          {/* 翻页控制 */}
+          {totalPages > 1 && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '24px',
+              marginTop: '32px',
+              paddingTop: '24px',
+              borderTop: `1px solid ${theme === 'dark' ? '#333' : '#ddd'}`
+            }}>
+              <Button
+                onClick={goToPrevPage}
+                disabled={safePageIndex === 0}
+              >
+                上一页
+              </Button>
+              <span style={{ color: toolbarText }}>
+                {safePageIndex + 1} - {Math.min(safePageIndex + (dualPage && canUseDualPage ? 2 : 1), totalPages)} / {totalPages} 页
+              </span>
+              <Button
+                onClick={goToNextPage}
+                disabled={safePageIndex >= maxPageIndex}
+              >
+                下一页
+              </Button>
             </div>
           )}
 
