@@ -67,6 +67,49 @@
 
 ---
 
+## 📦 版本发布流程（重要！）
+
+**发布新版本时必须按以下步骤操作：**
+
+1. **更新版本号**（在 novascribe 开发目录）：
+   - `package.json` - version 字段
+   - `src/pages/About/index.tsx` - APP_VERSION 常量
+   - `server/public/index.html` - 下载链接 URL
+   - `server/public/about.html` - 版本显示
+
+2. **同步到 novascribe-github**：
+   ```bash
+   # 复制修改的文件到 novascribe-github
+   ```
+
+3. **提交并推送代码**：
+   ```bash
+   cd novascribe-github
+   git add -A
+   git commit -m "vX.X.X: 更新说明"
+   git push
+   ```
+
+4. **创建并推送 tag**：
+   ```bash
+   git tag vX.X.X
+   git push origin vX.X.X
+   ```
+
+5. **GitHub Actions 自动处理**：
+   - 推送 tag 后，GitHub Actions 会自动构建各平台安装包
+   - 自动创建 Release 并上传安装包
+   - **不需要本地构建！不需要手动上传安装包！**
+
+6. **部署网站**：
+   ```bash
+   scp -i sshkey/nova.pem server/public/index.html ubuntu@storyglint.com:~/
+   scp -i sshkey/nova.pem server/public/about.html ubuntu@storyglint.com:~/
+   ssh -i sshkey/nova.pem ubuntu@storyglint.com 'sudo mv ~/index.html ~/about.html /var/www/novascribe/public/ && sudo chown www-data:www-data /var/www/novascribe/public/*.html'
+   ```
+
+---
+
 ## 🚀 服务器部署信息
 
 - **服务器地址**: storyglint.com
