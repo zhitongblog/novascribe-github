@@ -257,8 +257,44 @@ function ReadingMode({
   const content = htmlToReadableText(currentChapter.content || '')
   const paragraphs = content.split('\n\n').filter(p => p.trim())
 
-  // 双栏模式：使用 CSS columns 实现报纸式双栏排版，显示更多内容
+  // 双栏模式：屏幕宽度 >= 1200px 时可用
   const canUseDualPage = windowWidth >= 1200
+
+  // 双栏模式下，根据字数平均分配段落到两栏
+  const splitParagraphsForDualColumn = () => {
+    if (!dualPage || !canUseDualPage || paragraphs.length === 0) {
+      return { left: paragraphs, right: [] }
+    }
+
+    // 计算每个段落的字数
+    const paragraphLengths = paragraphs.map(p => p.length)
+    const totalLength = paragraphLengths.reduce((a, b) => a + b, 0)
+    const halfLength = totalLength / 2
+
+    // 找到最接近一半字数的分割点
+    let currentLength = 0
+    let splitIndex = 0
+    for (let i = 0; i < paragraphs.length; i++) {
+      currentLength += paragraphLengths[i]
+      if (currentLength >= halfLength) {
+        // 判断是在这里分割还是前一个位置更接近一半
+        const beforeDiff = Math.abs(halfLength - (currentLength - paragraphLengths[i]))
+        const afterDiff = Math.abs(halfLength - currentLength)
+        splitIndex = beforeDiff < afterDiff ? i : i + 1
+        break
+      }
+    }
+
+    // 确保至少有一个段落在左边
+    splitIndex = Math.max(1, Math.min(splitIndex, paragraphs.length - 1))
+
+    return {
+      left: paragraphs.slice(0, splitIndex),
+      right: paragraphs.slice(splitIndex)
+    }
+  }
+
+  const { left: leftParagraphs, right: rightParagraphs } = splitParagraphsForDualColumn()
 
   // 工具栏背景色（根据主题调整）
   const toolbarBg = theme === 'dark' ? '#16213e' : theme === 'light' ? '#f0f0f0' : theme === 'sepia' ? '#e8dcc8' : theme === 'green' ? '#b8d9bb' : theme === 'blue' ? '#bbdefb' : theme === 'pink' ? '#f8bbd9' : '#d8d8d8'
@@ -423,30 +459,63 @@ function ReadingMode({
 
           {/* 章节内容 */}
           {content ? (
-            <div
-              style={{
-                color: currentTheme.text,
-                // 双栏模式使用 CSS columns 实现报纸式排版
-                columnCount: dualPage && canUseDualPage ? 2 : 1,
-                columnGap: '48px',
-                columnRule: dualPage && canUseDualPage ? `1px solid ${theme === 'dark' ? '#333' : '#ddd'}` : 'none'
-              }}
-            >
-              {paragraphs.map((paragraph, index) => (
-                <p
-                  key={index}
+            dualPage && canUseDualPage ? (
+              // 双栏模式：左右两栏并排显示
+              <div style={{ display: 'flex', gap: '48px', alignItems: 'flex-start' }}>
+                {/* 左栏 */}
+                <div style={{ flex: 1, color: currentTheme.text }}>
+                  {leftParagraphs.map((paragraph, index) => (
+                    <p
+                      key={`left-${index}`}
+                      style={{
+                        marginBottom: '24px',
+                        textIndent: '2em'
+                      }}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+                {/* 分隔线 */}
+                <div
                   style={{
-                    marginBottom: '24px',
-                    textIndent: '2em',
-                    // 防止段落在分栏处被截断
-                    breakInside: 'avoid',
-                    pageBreakInside: 'avoid'
+                    width: '1px',
+                    alignSelf: 'stretch',
+                    background: theme === 'dark' ? '#333' : '#ddd',
+                    flexShrink: 0
                   }}
-                >
-                  {paragraph}
-                </p>
-              ))}
-            </div>
+                />
+                {/* 右栏 */}
+                <div style={{ flex: 1, color: currentTheme.text }}>
+                  {rightParagraphs.map((paragraph, index) => (
+                    <p
+                      key={`right-${index}`}
+                      style={{
+                        marginBottom: '24px',
+                        textIndent: '2em'
+                      }}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              // 单栏模式
+              <div style={{ color: currentTheme.text }}>
+                {paragraphs.map((paragraph, index) => (
+                  <p
+                    key={index}
+                    style={{
+                      marginBottom: '24px',
+                      textIndent: '2em'
+                    }}
+                  >
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            )
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 0', color: toolbarText }}>
               本章暂无内容
