@@ -176,15 +176,22 @@ function Layout() {
       message.loading('正在同步到云端...', 0)
       try {
         const result = await window.electron.serverSync.sync()
+        console.log('[Frontend] 同步结果:', result)
         message.destroy()
         if (result.success) {
           message.success(`同步完成！上传 ${result.uploaded || 0} 个，下载 ${result.downloaded || 0} 个`)
         } else {
-          message.error(`同步失败：${result.error || '未知错误'}`)
+          // 构建详细的错误信息
+          let errorMsg = result.error || '未知错误'
+          if (result.errors && result.errors.length > 0) {
+            errorMsg = result.errors.join('；')
+          }
+          message.error(`同步失败：${errorMsg}`, 5)
         }
       } catch (error: any) {
         message.destroy()
-        message.error(`同步失败：${error.message || '网络错误'}`)
+        console.error('[Frontend] 同步异常:', error)
+        message.error(`同步失败：${error.message || '网络错误'}`, 5)
       }
     } else if (key === 'restore') {
       message.loading('正在从云端恢复数据...', 0)
@@ -317,12 +324,17 @@ function Layout() {
                       if (result.success) {
                         message.success(`同步完成！上传 ${result.uploaded || 0} 个，下载 ${result.downloaded || 0} 个`)
                       } else {
-                        message.error(`同步失败：${result.error || '未知错误'}`)
+                        // 构建详细的错误信息
+                        let errorMsg = result.error || '未知错误'
+                        if (result.errors && result.errors.length > 0) {
+                          errorMsg = result.errors.join('；')
+                        }
+                        message.error(`同步失败：${errorMsg}`, 5)
                       }
                     } catch (error: any) {
                       message.destroy()
                       console.error('[Frontend] 同步异常:', error)
-                      message.error(`同步失败：${error.message || '网络错误'}`)
+                      message.error(`同步失败：${error.message || '网络错误'}`, 5)
                     }
                   }}
                 >
