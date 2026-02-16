@@ -263,6 +263,11 @@ function ReadingMode({
         .sort((a, b) => a.order - b.order)
     }))
 
+  // 切换章节时重置页码（必须在条件返回之前）
+  useEffect(() => {
+    setCurrentPageIndex(0)
+  }, [currentChapter?.id])
+
   // 如果不可见或没有章节，不渲染
   if (!visible || !currentChapter) return null
 
@@ -305,11 +310,6 @@ function ReadingMode({
     const step = dualPage && canUseDualPage ? 2 : 1
     setCurrentPageIndex(prev => Math.min(maxPageIndex, prev + step))
   }
-
-  // 切换章节时重置页码
-  useEffect(() => {
-    setCurrentPageIndex(0)
-  }, [currentChapter?.id])
 
   // 调试日志
   console.log('[ReadingMode] 双页模式状态:', {
