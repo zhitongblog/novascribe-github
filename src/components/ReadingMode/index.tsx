@@ -296,6 +296,16 @@ function ReadingMode({
 
   const { left: leftParagraphs, right: rightParagraphs } = splitParagraphsForDualColumn()
 
+  // 调试日志
+  console.log('[ReadingMode] 双栏模式状态:', {
+    dualPage,
+    canUseDualPage,
+    windowWidth,
+    paragraphsCount: paragraphs.length,
+    leftCount: leftParagraphs.length,
+    rightCount: rightParagraphs.length
+  })
+
   // 工具栏背景色（根据主题调整）
   const toolbarBg = theme === 'dark' ? '#16213e' : theme === 'light' ? '#f0f0f0' : theme === 'sepia' ? '#e8dcc8' : theme === 'green' ? '#b8d9bb' : theme === 'blue' ? '#bbdefb' : theme === 'pink' ? '#f8bbd9' : '#d8d8d8'
   const toolbarBorder = theme === 'dark' ? '#0f3460' : '#cccccc'
