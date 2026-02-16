@@ -25,15 +25,15 @@ interface ReadingModeProps {
   onChapterChange: (chapter: Chapter) => void
 }
 
-// 背景色主题配置
+// 背景色主题配置 - 确保文字颜色有足够对比度
 const THEME_OPTIONS = [
-  { key: 'dark', label: '夜间', bg: '#0f0f1a', text: '#d0d0d0', title: '#e0e0e0' },
-  { key: 'sepia', label: '羊皮纸', bg: '#f4ecd8', text: '#5b4636', title: '#3d2914' },
-  { key: 'green', label: '护眼绿', bg: '#cce8cf', text: '#2d4a32', title: '#1a3d1f' },
-  { key: 'light', label: '日间', bg: '#ffffff', text: '#333333', title: '#000000' },
-  { key: 'gray', label: '灰色', bg: '#e8e8e8', text: '#444444', title: '#222222' },
-  { key: 'blue', label: '淡蓝', bg: '#e3f2fd', text: '#1565c0', title: '#0d47a1' },
-  { key: 'pink', label: '浅粉', bg: '#fce4ec', text: '#c2185b', title: '#880e4f' }
+  { key: 'dark', label: '夜间', bg: '#1a1a2e', text: '#e0e0e0', title: '#ffffff' },
+  { key: 'sepia', label: '羊皮纸', bg: '#f5f0e1', text: '#3d3020', title: '#1a1005' },
+  { key: 'green', label: '护眼绿', bg: '#c8e6c9', text: '#1b3d1c', title: '#0d260e' },
+  { key: 'light', label: '日间', bg: '#ffffff', text: '#1a1a1a', title: '#000000' },
+  { key: 'gray', label: '灰色', bg: '#f0f0f0', text: '#1a1a1a', title: '#000000' },
+  { key: 'blue', label: '淡蓝', bg: '#e8f4fc', text: '#0d2137', title: '#051525' },
+  { key: 'pink', label: '浅粉', bg: '#fce4ec', text: '#4a1025', title: '#2d0815' }
 ]
 
 // 字体选项
@@ -257,11 +257,8 @@ function ReadingMode({
   const content = htmlToReadableText(currentChapter.content || '')
   const paragraphs = content.split('\n\n').filter(p => p.trim())
 
-  // 双栏模式下分割段落
+  // 双栏模式：使用 CSS columns 实现报纸式双栏排版，显示更多内容
   const canUseDualPage = windowWidth >= 1200
-  const midPoint = Math.ceil(paragraphs.length / 2)
-  const leftParagraphs = dualPage && canUseDualPage ? paragraphs.slice(0, midPoint) : paragraphs
-  const rightParagraphs = dualPage && canUseDualPage ? paragraphs.slice(midPoint) : []
 
   // 工具栏背景色（根据主题调整）
   const toolbarBg = theme === 'dark' ? '#16213e' : theme === 'light' ? '#f0f0f0' : theme === 'sepia' ? '#e8dcc8' : theme === 'green' ? '#b8d9bb' : theme === 'blue' ? '#bbdefb' : theme === 'pink' ? '#f8bbd9' : '#d8d8d8'
@@ -402,9 +399,9 @@ function ReadingMode({
       >
         <div
           style={{
-            maxWidth: dualPage && canUseDualPage ? '1200px' : '700px',
+            maxWidth: dualPage && canUseDualPage ? '1400px' : '700px',
             margin: '0 auto',
-            padding: '48px 32px',
+            padding: dualPage && canUseDualPage ? '48px 48px' : '48px 32px',
             fontSize: `${fontSize}px`,
             lineHeight: 1.8,
             fontFamily: currentFont
@@ -426,40 +423,30 @@ function ReadingMode({
 
           {/* 章节内容 */}
           {content ? (
-            dualPage && canUseDualPage ? (
-              // 双栏模式
-              <div style={{ display: 'flex', gap: '48px' }}>
-                <div style={{ flex: 1, color: currentTheme.text }}>
-                  {leftParagraphs.map((paragraph, index) => (
-                    <p key={index} style={{ marginBottom: '24px', textIndent: '2em' }}>
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-                <div
+            <div
+              style={{
+                color: currentTheme.text,
+                // 双栏模式使用 CSS columns 实现报纸式排版
+                columnCount: dualPage && canUseDualPage ? 2 : 1,
+                columnGap: '48px',
+                columnRule: dualPage && canUseDualPage ? `1px solid ${theme === 'dark' ? '#333' : '#ddd'}` : 'none'
+              }}
+            >
+              {paragraphs.map((paragraph, index) => (
+                <p
+                  key={index}
                   style={{
-                    width: '1px',
-                    background: theme === 'dark' ? '#333' : '#ddd'
+                    marginBottom: '24px',
+                    textIndent: '2em',
+                    // 防止段落在分栏处被截断
+                    breakInside: 'avoid',
+                    pageBreakInside: 'avoid'
                   }}
-                />
-                <div style={{ flex: 1, color: currentTheme.text }}>
-                  {rightParagraphs.map((paragraph, index) => (
-                    <p key={index} style={{ marginBottom: '24px', textIndent: '2em' }}>
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              // 单栏模式
-              <div style={{ color: currentTheme.text }}>
-                {paragraphs.map((paragraph, index) => (
-                  <p key={index} style={{ marginBottom: '24px', textIndent: '2em' }}>
-                    {paragraph}
-                  </p>
-                ))}
-              </div>
-            )
+                >
+                  {paragraph}
+                </p>
+              ))}
+            </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 0', color: toolbarText }}>
               本章暂无内容
