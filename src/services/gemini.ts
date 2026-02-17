@@ -148,9 +148,10 @@ export async function generateCoverImage(
   bookTitle: string,
   authorName: string,
   style: string,
-  genres: string[]
+  genres: string[],
+  characters?: import('../types').Character[]
 ): Promise<string> {
-  return aiGenerateCoverImage(bookTitle, authorName, style, genres)
+  return aiGenerateCoverImage(bookTitle, authorName, style, genres, characters)
 }
 
 /**

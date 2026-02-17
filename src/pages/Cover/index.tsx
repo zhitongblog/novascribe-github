@@ -4,7 +4,6 @@ import { Card, Input, Button, Spin, message, Select, Checkbox, Space, Divider } 
 import { PictureOutlined, DownloadOutlined, RobotOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
 import { isGeminiReady, initGemini, generateCoverImage, getCurrentModelName } from '../../services/gemini'
-import type { Character } from '../../types'
 
 // 扩展的风格选项
 const styleOptions = [
