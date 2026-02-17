@@ -2,6 +2,7 @@
 export interface Project {
   id: string
   title: string
+  author?: string           // 作者名（封面使用）
   inspiration: string
   constraints: string
   scale: 'micro' | 'million'
@@ -9,6 +10,7 @@ export interface Project {
   styles: string[]
   worldSetting: string
   summary: string
+  coverHistory?: string[]   // 封面历史记录（base64图片，最多保存5张）
   createdAt: string
   updatedAt: string
   syncedAt?: string

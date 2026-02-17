@@ -129,7 +129,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
 function Cover() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { currentProject, loadProject } = useProjectStore()
+  const { currentProject, loadProject, updateProject } = useProjectStore()
 
   const [bookTitle, setBookTitle] = useState('')
   const [authorName, setAuthorName] = useState('')
@@ -144,11 +144,34 @@ function Cover() {
     }
   }, [projectId, loadProject])
 
+  // 加载项目时，同时加载作者名和封面历史
   useEffect(() => {
     if (currentProject) {
       setBookTitle(currentProject.title)
+      // 加载保存的作者名
+      if (currentProject.author) {
+        setAuthorName(currentProject.author)
+      }
+      // 加载保存的封面历史
+      if (currentProject.coverHistory && currentProject.coverHistory.length > 0) {
+        setCoverHistory(currentProject.coverHistory)
+        // 默认显示最近一张
+        setCoverUrl(currentProject.coverHistory[0])
+      }
     }
   }, [currentProject])
+
+  // 作者名变化时自动保存（防抖）
+  useEffect(() => {
+    if (!projectId || !currentProject) return
+    // 只有当作者名真正改变时才保存
+    if (authorName !== (currentProject.author || '')) {
+      const timer = setTimeout(() => {
+        updateProject(projectId, { author: authorName })
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [authorName, projectId, currentProject, updateProject])
 
   // 初始化 Gemini
   useEffect(() => {
@@ -197,8 +220,13 @@ function Cover() {
 
       message.destroy()
       setCoverUrl(finalCoverUrl)
-      // 添加到历史记录
-      setCoverHistory(prev => [finalCoverUrl, ...prev.slice(0, 4)])
+      // 添加到历史记录并保存到项目
+      const newHistory = [finalCoverUrl, ...coverHistory.slice(0, 4)]
+      setCoverHistory(newHistory)
+      // 保存封面历史到项目
+      if (projectId) {
+        updateProject(projectId, { coverHistory: newHistory })
+      }
       message.success('封面生成完成！')
     } catch (error: any) {
       message.destroy()
@@ -383,7 +411,13 @@ function Cover() {
           coverHistory.length > 0 && (
             <Button
               size="small"
-              onClick={() => setCoverHistory([])}
+              onClick={() => {
+                setCoverHistory([])
+                setCoverUrl(null)
+                if (projectId) {
+                  updateProject(projectId, { coverHistory: [] })
+                }
+              }}
             >
               清空历史
             </Button>

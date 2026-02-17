@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Input, Button, message, Spin, Divider, Space } from 'antd'
-import { SaveOutlined, KeyOutlined } from '@ant-design/icons'
+import { Card, Input, Button, message, Spin, Divider, Space, Modal, List } from 'antd'
+import { SaveOutlined, KeyOutlined, EditOutlined, RobotOutlined, CheckOutlined } from '@ant-design/icons'
 import RichEditor from '../../components/RichEditor'
 import { useProjectStore } from '../../stores/project'
-import { initGemini } from '../../services/gemini'
+import { initGemini, generateBookTitle, isGeminiReady } from '../../services/gemini'
 
 function Settings() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -15,6 +15,14 @@ function Settings() {
   const [isSaving, setIsSaving] = useState(false)
   const [isKeyModified, setIsKeyModified] = useState(false)
 
+  // 书名相关状态
+  const [bookTitle, setBookTitle] = useState('')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [isSavingTitle, setIsSavingTitle] = useState(false)
+  const [isGeneratingTitles, setIsGeneratingTitles] = useState(false)
+  const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
+  const [showTitleModal, setShowTitleModal] = useState(false)
+
   useEffect(() => {
     if (projectId) {
       loadProject(projectId)
@@ -24,6 +32,7 @@ function Settings() {
   useEffect(() => {
     if (currentProject) {
       setWorldSetting(currentProject.worldSetting || '')
+      setBookTitle(currentProject.title || '')
     }
   }, [currentProject])
 
@@ -38,6 +47,68 @@ function Settings() {
     }
     loadApiKey()
   }, [])
+
+  // 保存书名
+  const handleSaveTitle = async () => {
+    if (!projectId || !bookTitle.trim()) {
+      message.warning('书名不能为空')
+      return
+    }
+
+    setIsSavingTitle(true)
+    try {
+      await updateProject(projectId, { title: bookTitle.trim() })
+      setIsEditingTitle(false)
+      message.success('书名已保存')
+    } catch (error) {
+      message.error('保存失败')
+    } finally {
+      setIsSavingTitle(false)
+    }
+  }
+
+  // AI 生成书名建议
+  const handleGenerateTitles = async () => {
+    if (!isGeminiReady()) {
+      message.warning('请先配置 Gemini API Key')
+      return
+    }
+
+    setIsGeneratingTitles(true)
+    setShowTitleModal(true)
+    setTitleSuggestions([])
+
+    try {
+      const titles = await generateBookTitle(
+        currentProject?.inspiration || '',
+        currentProject?.genres || []
+      )
+      setTitleSuggestions(titles)
+    } catch (error: any) {
+      message.error(error.message || 'AI 生成失败')
+      setShowTitleModal(false)
+    } finally {
+      setIsGeneratingTitles(false)
+    }
+  }
+
+  // 选择 AI 生成的书名
+  const handleSelectTitle = async (title: string) => {
+    if (!projectId) return
+
+    setIsSavingTitle(true)
+    try {
+      await updateProject(projectId, { title })
+      setBookTitle(title)
+      setShowTitleModal(false)
+      setIsEditingTitle(false)
+      message.success('书名已更新')
+    } catch (error) {
+      message.error('保存失败')
+    } finally {
+      setIsSavingTitle(false)
+    }
+  }
 
   // 保存世界观设定
   const handleSaveWorldSetting = async () => {
@@ -93,14 +164,124 @@ function Settings() {
     <div className="p-6 fade-in">
       {/* 头部 */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-dark-text mb-1">世界观设定</h1>
-        <p className="text-dark-muted">定义你故事中的世界规则和力量体系</p>
+        <h1 className="text-2xl font-bold text-dark-text mb-1">项目设置</h1>
+        <p className="text-dark-muted">管理书名、世界观和 API 配置</p>
       </div>
+
+      {/* 书名设置 */}
+      <Card
+        className="mb-6"
+        title={
+          <Space>
+            <EditOutlined />
+            <span>书名设置</span>
+          </Space>
+        }
+        style={{ background: '#16213e', border: '1px solid #0f3460' }}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-dark-text mb-2">当前书名</label>
+            {isEditingTitle ? (
+              <div className="flex gap-2">
+                <Input
+                  size="large"
+                  value={bookTitle}
+                  onChange={(e) => setBookTitle(e.target.value)}
+                  placeholder="输入书名"
+                  className="flex-1"
+                />
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={handleSaveTitle}
+                  loading={isSavingTitle}
+                >
+                  保存
+                </Button>
+                <Button
+                  onClick={() => {
+                    setBookTitle(currentProject?.title || '')
+                    setIsEditingTitle(false)
+                  }}
+                >
+                  取消
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <span className="text-xl font-bold text-primary-400">
+                  {currentProject?.title || '未命名'}
+                </span>
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={() => setIsEditingTitle(true)}
+                >
+                  修改
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <Divider className="my-4" />
+
+          <div>
+            <label className="block text-dark-text mb-2">AI 生成书名</label>
+            <p className="text-dark-muted text-sm mb-3">
+              根据你的创作灵感和题材，让 AI 为你推荐合适的书名
+            </p>
+            <Button
+              icon={<RobotOutlined />}
+              onClick={handleGenerateTitles}
+              loading={isGeneratingTitles}
+            >
+              AI 推荐书名
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* AI 书名推荐弹窗 */}
+      <Modal
+        title="AI 推荐书名"
+        open={showTitleModal}
+        onCancel={() => setShowTitleModal(false)}
+        footer={null}
+        width={500}
+      >
+        {isGeneratingTitles ? (
+          <div className="text-center py-8">
+            <Spin size="large" />
+            <p className="text-dark-muted mt-4">AI 正在为你构思书名...</p>
+          </div>
+        ) : (
+          <List
+            dataSource={titleSuggestions}
+            renderItem={(title) => (
+              <List.Item
+                className="cursor-pointer hover:bg-dark-hover rounded px-3"
+                onClick={() => handleSelectTitle(title)}
+              >
+                <span className="text-lg">{title}</span>
+                <Button type="link" size="small">
+                  使用此书名
+                </Button>
+              </List.Item>
+            )}
+            locale={{ emptyText: '暂无推荐' }}
+          />
+        )}
+      </Modal>
 
       {/* 世界观编辑器 */}
       <Card
         className="mb-6"
-        title="世界观描述"
+        title={
+          <Space>
+            <span>世界观设定</span>
+          </Space>
+        }
         extra={
           <Button
             type="primary"
