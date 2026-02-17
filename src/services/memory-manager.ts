@@ -17,9 +17,9 @@ import type {
   CharacterState,
   ChapterSummary
 } from '../types/memory'
-import type { Character, Volume, Chapter } from '../types'
+import type { Character } from '../types'
 import { analyzeChapterEmotion } from './emotional-arc'
-import { detectPlotThreads } from './plot-tracker'
+// import { detectPlotThreads } from './plot-tracker'
 
 // ==================== 核心记忆管理 ====================
 
