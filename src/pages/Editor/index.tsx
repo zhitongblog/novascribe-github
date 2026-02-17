@@ -43,8 +43,7 @@ import {
   detectDeceasedInContent,
   formatViolationWarning,
   buildDeathConfirmationPrompt,
-  detectCharacterAppearances,
-  formatAppearanceUpdateMessage
+  detectCharacterAppearances
 } from '../../services/character-utils'
 import {
   writeChapterStrict,

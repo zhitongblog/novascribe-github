@@ -1,12 +1,11 @@
 import { generateText } from './gemini'
-import type { Character, Volume, Chapter } from '../types'
+import type { Character, Volume } from '../types'
 import { buildCompressedContext } from './outline-optimizer'
 import {
   buildVolumeBoundary,
   buildBoundaryConstraintPrompt,
   validateGeneratedOutlines,
-  formatValidationResult,
-  type ValidationResult
+  formatValidationResult
 } from './outline-validator'
 
 interface AutoCreateResult {
