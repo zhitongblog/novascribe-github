@@ -1,14 +1,19 @@
 import { generateText } from './gemini'
 import type { Character } from '../types'
+import { getFullAntiAIGuidelines, getSceneSpecificGuidelines, generateSelfCheckList, ENHANCED_ANTI_AI_GUIDELINES } from './anti-ai-guidelines'
 
 /**
  * 生成剧情摘要 - 用于保持长篇连贯性
- * 每隔一定章节更新一次摘要
+ * 支持事件驱动更新
  */
 export async function generateStorySummary(
   existingSummary: string,
   recentChapters: { title: string; content: string }[],
-  characters: Character[]
+  characters: Character[],
+  options?: {
+    triggerReason?: 'interval' | 'major_event' | 'character_death' | 'power_up' | 'new_arc'
+    majorEvent?: string
+  }
 ): Promise<string> {
   if (recentChapters.length === 0) return existingSummary
 
@@ -17,6 +22,15 @@ export async function generateStorySummary(
     .join('\n\n')
 
   const characterNames = characters.map(c => c.name).join('、')
+
+  // 根据触发原因调整提示
+  const triggerContext = options?.triggerReason === 'major_event'
+    ? `\n【重大事件】本次更新触发原因：${options.majorEvent || '重大剧情变化'}`
+    : options?.triggerReason === 'character_death'
+    ? '\n【重要】本次更新因角色死亡触发，请特别标注死亡角色信息'
+    : options?.triggerReason === 'power_up'
+    ? '\n【重要】本次更新因主角突破触发，请特别记录实力变化'
+    : ''
 
   const prompt = `你是一个专业的小说编辑，请根据以下信息更新故事摘要。
 
@@ -28,23 +42,90 @@ ${recentContent}
 
 【主要角色】
 ${characterNames}
+${triggerContext}
 
-请生成一份简洁但完整的剧情摘要（300-500字），要求：
-1. 记录所有重要事件和转折点
-2. 明确标注哪些角色已经死亡（如有）
-3. 记录角色之间的关系变化
-4. 记录主角的能力/实力变化
-5. 记录重要的物品、地点变化
-6. 按时间顺序组织
+请生成一份简洁但完整的剧情摘要（400-600字），要求：
 
-格式要求：
+## 必须记录的信息
+1. 主线剧情进展（当前到哪一步）
+2. 重要事件和转折点（按时间顺序）
+3. 角色状态变化：
+   - 死亡角色：【已死亡】标注
+   - 实力变化：境界/能力提升
+   - 位置变化：重要的地点转移
+4. 角色关系变化（新的盟友/敌人/关系破裂等）
+5. 未解决的冲突和伏笔
+
+## 格式要求
 - 用简洁的陈述句
 - 重要信息用【】标注
-- 死亡角色用"已死亡"标注
+- 死亡角色用"【已死亡】"明确标注
+- 分段组织：主线、角色、伏笔
 
 只输出摘要内容，不要任何解释。`
 
   return generateText(prompt)
+}
+
+/**
+ * 检测是否应该更新摘要（事件驱动）
+ */
+export async function shouldUpdateSummary(
+  chapterContent: string,
+  chapterIndex: number,
+  lastUpdateChapter: number,
+  config: { intervalChapters: number } = { intervalChapters: 10 }
+): Promise<{
+  shouldUpdate: boolean
+  reason: 'interval' | 'major_event' | 'character_death' | 'power_up' | 'new_arc' | null
+  eventDescription?: string
+}> {
+  // 定期更新
+  if (chapterIndex - lastUpdateChapter >= config.intervalChapters) {
+    return { shouldUpdate: true, reason: 'interval' }
+  }
+
+  // 检测重大事件
+  const prompt = `快速判断以下章节是否包含需要立即更新故事摘要的重大事件。
+
+【章节内容片段】
+${chapterContent.slice(0, 1500)}
+
+重大事件类型：
+1. character_death - 重要角色死亡
+2. power_up - 主角重大突破
+3. major_event - 重大剧情转折
+4. new_arc - 新篇章开始
+
+返回JSON：
+\`\`\`json
+{
+  "hasMajorEvent": true/false,
+  "eventType": "事件类型或null",
+  "description": "简短描述"
+}
+\`\`\`
+只输出JSON。`
+
+  try {
+    const result = await generateText(prompt)
+    const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/) || result.match(/\{[\s\S]*\}/)
+
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0])
+      if (parsed.hasMajorEvent && parsed.eventType) {
+        return {
+          shouldUpdate: true,
+          reason: parsed.eventType,
+          eventDescription: parsed.description
+        }
+      }
+    }
+  } catch (e) {
+    // 检测失败，不触发更新
+  }
+
+  return { shouldUpdate: false, reason: null }
 }
 
 /**
@@ -360,12 +441,22 @@ ${nextChapterOutline ? `【下章预告】
 5. 最后一段必须是具体的动作、对话或场景
 6. 绝对禁止任何形式的总结句、感悟句、升华句
 
+【进阶去AI化要求】
+1. 句式变化：长短句比例3:1，每5句至少1个短句
+2. 句首变化：禁止连续2句以上"他/她"开头
+3. 词汇禁用："一时间"、"刹那间"、"冷冷道"、"淡淡道"
+4. 描写技巧：用动词代替形容词，用具体代替抽象
+5. 对话规范：每角色有独特说话方式，对话穿插动作描写
+
 【检查清单 - 写完后自查】
 □ 没有"就这样"、"于是"、"总之"等AI套话
 □ 没有"眼中闪过"、"深吸一口气"等AI惯用句
 □ 没有结尾总结或升华
-□ 对话简洁自然
+□ 没有连续3句以上相同句式
+□ 对话简洁自然，有角色特色
 □ 描写具体不抽象
+□ 长短句有变化
+□ 章末是动作/对话/场景，不是感悟
 □ 严格遵循大纲
 □ 字数适中不注水
 
@@ -615,12 +706,14 @@ export async function autoWriteAll(
   const recentChapters: { title: string; content: string }[] = [] // 最近写的章节（用于摘要）
   const newChaptersForAnalysis: { title: string; content: string }[] = [] // 新章节（用于角色分析）
 
-  // 配置项
+  // 配置项（优化：缩短摘要更新间隔，支持事件驱动）
   const config = {
-    summaryInterval: autoUpdateConfig?.summaryInterval || 20,
+    summaryInterval: autoUpdateConfig?.summaryInterval || 10,  // 从20章缩短到10章
     characterInterval: autoUpdateConfig?.characterInterval || 30,
-    enableAutoUpdate: autoUpdateConfig?.enableAutoUpdate !== false
+    enableAutoUpdate: autoUpdateConfig?.enableAutoUpdate !== false,
+    enableEventDrivenUpdate: true  // 启用事件驱动更新
   }
+  let lastSummaryUpdateChapter = 0  // 记录上次摘要更新的章节
 
   console.log(`📊 [AutoWrite] 自动更新配置：`, config)
 
@@ -710,13 +803,46 @@ export async function autoWriteAll(
       continue
     }
 
-    // 定期更新摘要和角色档案（减少API调用）
-    if (config.enableAutoUpdate) {
-      // 更新剧情摘要（用于保持长篇连贯性）
-      if (recentChapters.length >= config.summaryInterval) {
+    // 智能更新摘要和角色档案（事件驱动 + 定期更新）
+    if (config.enableAutoUpdate && recentChapters.length > 0) {
+      const lastContent = recentChapters[recentChapters.length - 1]?.content || ''
+
+      // 检测是否应该更新摘要（事件驱动）
+      let shouldUpdate = recentChapters.length >= config.summaryInterval
+      let updateReason: 'interval' | 'major_event' | 'character_death' | 'power_up' | 'new_arc' = 'interval'
+      let eventDesc = ''
+
+      if (config.enableEventDrivenUpdate && !shouldUpdate && lastContent.length > 500) {
+        // 事件驱动检测（只在非定期更新时检测，节省API调用）
         try {
-          storySummary = await generateStorySummary(storySummary, recentChapters.slice(-5), characters)
-          console.log(`✅ [AutoWrite] 已更新全书摘要 (${recentChapters.length}章)`)
+          const eventCheck = await shouldUpdateSummary(
+            lastContent,
+            globalChapterNumber,
+            lastSummaryUpdateChapter,
+            { intervalChapters: config.summaryInterval }
+          )
+          if (eventCheck.shouldUpdate && eventCheck.reason) {
+            shouldUpdate = true
+            updateReason = eventCheck.reason
+            eventDesc = eventCheck.eventDescription || ''
+            console.log(`🔔 [AutoWrite] 检测到重大事件触发摘要更新: ${updateReason}`)
+          }
+        } catch (e) {
+          // 检测失败不影响主流程
+        }
+      }
+
+      // 更新剧情摘要
+      if (shouldUpdate) {
+        try {
+          storySummary = await generateStorySummary(
+            storySummary,
+            recentChapters.slice(-5),
+            characters,
+            { triggerReason: updateReason, majorEvent: eventDesc }
+          )
+          lastSummaryUpdateChapter = globalChapterNumber
+          console.log(`✅ [AutoWrite] 已更新全书摘要 (原因: ${updateReason}, 章节数: ${recentChapters.length})`)
 
           // 保存摘要到项目
           if (onSummaryUpdate) {
