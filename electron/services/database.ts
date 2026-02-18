@@ -74,6 +74,13 @@ export class DatabaseService {
     try {
       this.db.exec(`ALTER TABLE volumes ADD COLUMN generating_lock INTEGER DEFAULT 0`)
     } catch { /* 字段已存在 */ }
+    // 迁移：添加主线剧情和关键事件字段（防止章节与卷大纲冲突）
+    try {
+      this.db.exec(`ALTER TABLE volumes ADD COLUMN main_plot TEXT DEFAULT ''`)
+    } catch { /* 字段已存在 */ }
+    try {
+      this.db.exec(`ALTER TABLE volumes ADD COLUMN key_events TEXT DEFAULT '[]'`)
+    } catch { /* 字段已存在 */ }
 
     // 章节表
     this.db.exec(`
@@ -336,8 +343,8 @@ export class DatabaseService {
     const sortOrder = (maxOrder?.max || 0) + 1
 
     const stmt = this.db!.prepare(`
-      INSERT INTO volumes (id, project_id, title, summary, sort_order, key_points, brief_chapters, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO volumes (id, project_id, title, summary, sort_order, key_points, brief_chapters, main_plot, key_events, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     stmt.run(
@@ -348,6 +355,8 @@ export class DatabaseService {
       sortOrder,
       JSON.stringify(data.keyPoints || []),
       JSON.stringify(data.briefChapters || []),
+      data.mainPlot || '',
+      JSON.stringify(data.keyEvents || []),
       now,
       now
     )
@@ -385,6 +394,14 @@ export class DatabaseService {
     if (data.briefChapters !== undefined) {
       updates.push('brief_chapters = ?')
       values.push(JSON.stringify(data.briefChapters))
+    }
+    if (data.mainPlot !== undefined) {
+      updates.push('main_plot = ?')
+      values.push(data.mainPlot)
+    }
+    if (data.keyEvents !== undefined) {
+      updates.push('key_events = ?')
+      values.push(JSON.stringify(data.keyEvents))
     }
 
     if (updates.length > 0) {
@@ -481,6 +498,8 @@ export class DatabaseService {
       order: row.sort_order,
       keyPoints: row.key_points ? JSON.parse(row.key_points) : [],
       briefChapters: row.brief_chapters ? JSON.parse(row.brief_chapters) : [],
+      mainPlot: row.main_plot || '',
+      keyEvents: row.key_events ? JSON.parse(row.key_events) : [],
       generatingLock: row.generating_lock || 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at

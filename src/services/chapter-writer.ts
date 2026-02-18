@@ -791,17 +791,33 @@ export async function autoWriteAll(
       continue
     }
 
-    // 检查大纲
+    // 检查前一章是否有内容（仅在循环第一次迭代且不是全书第一章时检查）
+    // 后续章节因为是按顺序处理的，前一章必然已被处理（写完或跳过）
+    if (i === 0 && startIndex > 0) {
+      const prevChapter = sortedChapters[startIndex - 1]
+      if (prevChapter && (!prevChapter.content || prevChapter.content.trim().length <= 500)) {
+        onProgress({
+          currentChapter: globalChapterNumber,
+          totalChapters: sortedChapters.length,
+          chapterTitle: chapter.title,
+          status: 'error',
+          error: '前一章缺少内容'
+        })
+        throw new Error(`第 ${globalChapterNumber} 章「${chapter.title}」的前一章「${prevChapter.title}」没有内容，全自动写作已终止。请先确保前面的章节都已生成内容。`)
+      }
+    }
+
+    // 检查大纲 - 如果缺少大纲，立即终止全自动写作
     if (!chapter.outline || chapter.outline.trim().length < 10) {
       onProgress({
-        currentChapter: globalChapterNumber,  // 🔥 使用全局编号
-        totalChapters: sortedChapters.length,  // 🔥 使用全书总数
+        currentChapter: globalChapterNumber,
+        totalChapters: sortedChapters.length,
         chapterTitle: chapter.title,
         status: 'error',
         error: '缺少大纲'
       })
-      failed++
-      continue
+      // 抛出错误终止写作，避免跳过章节导致内容不连贯
+      throw new Error(`第 ${globalChapterNumber} 章「${chapter.title}」缺少大纲，全自动写作已终止。请先为该章节生成大纲后再继续。`)
     }
 
     // 智能更新摘要和角色档案（事件驱动 + 定期更新）

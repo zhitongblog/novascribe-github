@@ -49,6 +49,7 @@ export interface VolumeBoundary {
 
 /**
  * 从卷信息中提取关键事件
+ * 改进：提取完整的事件描述而不是单个词，保留上下文
  */
 export function extractKeyEvents(
   volumeSummary: string,
@@ -57,42 +58,53 @@ export function extractKeyEvents(
 ): string[] {
   const events: string[] = []
 
-  // 1. 从明确的关键事件中提取
+  // 1. 从明确的关键事件中提取（优先级最高）
   if (keyEvents && keyEvents.length > 0) {
     events.push(...keyEvents)
   }
 
-  // 2. 从主线剧情中提取关键词
+  // 2. 从主线剧情中提取完整事件短语
   if (mainPlot) {
-    // 提取动作性关键词
-    const actionPatterns = [
-      /击败|战胜|打败|消灭|杀死|斩杀|覆灭/g,
-      /突破|晋级|进阶|觉醒|获得|得到|习得/g,
-      /发现|揭露|揭开|知道|了解|真相/g,
-      /结盟|联合|背叛|反目|决裂/g,
-      /逃离|离开|进入|到达|返回/g,
-      /比赛|大赛|考核|试炼|挑战/g
-    ]
-
-    for (const pattern of actionPatterns) {
-      const matches = mainPlot.match(pattern)
-      if (matches) {
-        events.push(...matches)
+    // 按句号、分号分割成子句，每个子句可能是一个事件
+    const clauses = mainPlot.split(/[。；;]/).filter(c => c.trim().length > 5)
+    for (const clause of clauses) {
+      const trimmed = clause.trim()
+      // 过滤掉纯描述性的短语，保留有动作的
+      if (trimmed.length > 5 && trimmed.length < 50) {
+        events.push(trimmed)
       }
     }
   }
 
-  // 3. 从卷摘要中提取（更简化的方式）
-  if (volumeSummary) {
-    // 提取关键名词和动作
-    const importantPhrases = volumeSummary.match(/[^，。！？、]+[击败|突破|获得|发现|进入|离开|对抗|挑战|参加][^，。！？、]*/g)
-    if (importantPhrases) {
-      events.push(...importantPhrases.slice(0, 3))
+  // 3. 从卷摘要中提取关键事件短语
+  if (volumeSummary && events.length < 3) {
+    // 按标点分割成子句
+    const clauses = volumeSummary.split(/[，。！？、；]/).filter(c => c.trim().length > 4)
+
+    // 关键动作词列表
+    const actionKeywords = [
+      '击败', '战胜', '打败', '消灭', '杀死', '斩杀', '覆灭',
+      '突破', '晋级', '进阶', '觉醒', '获得', '得到', '习得',
+      '发现', '揭露', '揭开', '知道', '了解', '真相',
+      '结盟', '联合', '背叛', '反目', '决裂',
+      '逃离', '离开', '进入', '到达', '返回', '前往',
+      '比赛', '大赛', '考核', '试炼', '挑战', '参加',
+      '死亡', '牺牲', '陨落', '复活', '苏醒'
+    ]
+
+    for (const clause of clauses) {
+      const trimmed = clause.trim()
+      // 检查是否包含关键动作词
+      const hasAction = actionKeywords.some(kw => trimmed.includes(kw))
+      if (hasAction && trimmed.length >= 4 && trimmed.length < 40) {
+        events.push(trimmed)
+      }
     }
   }
 
-  // 去重
-  return [...new Set(events)]
+  // 去重并限制数量（最多5个）
+  const uniqueEvents = [...new Set(events)]
+  return uniqueEvents.slice(0, 5)
 }
 
 /**
@@ -112,26 +124,30 @@ export function buildVolumeBoundary(
     completedEvents: []
   }
 
-  // 本卷必须完成的事件
-  if (currentVolume.keyPoints) {
+  // 本卷必须完成的事件（优先使用 keyEvents，其次 keyPoints，最后从摘要提取）
+  if (currentVolume.keyEvents && currentVolume.keyEvents.length > 0) {
+    boundary.mustCompleteEvents = [...currentVolume.keyEvents]
+  } else if (currentVolume.keyPoints && currentVolume.keyPoints.length > 0) {
     boundary.mustCompleteEvents = [...currentVolume.keyPoints]
   } else {
     boundary.mustCompleteEvents = extractKeyEvents(
       currentVolume.summary,
       undefined,
-      (currentVolume as any).mainPlot
+      currentVolume.mainPlot
     )
   }
 
   // 上一卷已完成的事件（不可重复）
   if (previousVolume) {
-    if (previousVolume.keyPoints) {
+    if (previousVolume.keyEvents && previousVolume.keyEvents.length > 0) {
+      boundary.completedEvents = [...previousVolume.keyEvents]
+    } else if (previousVolume.keyPoints && previousVolume.keyPoints.length > 0) {
       boundary.completedEvents = [...previousVolume.keyPoints]
     } else {
       boundary.completedEvents = extractKeyEvents(
         previousVolume.summary,
         undefined,
-        (previousVolume as any).mainPlot
+        previousVolume.mainPlot
       )
     }
     boundary.startingState = `承接《${previousVolume.title}》结尾`
@@ -139,13 +155,15 @@ export function buildVolumeBoundary(
 
   // 下一卷的事件（不可提前写）
   if (nextVolume) {
-    if (nextVolume.keyPoints) {
+    if (nextVolume.keyEvents && nextVolume.keyEvents.length > 0) {
+      boundary.forbiddenEvents = [...nextVolume.keyEvents]
+    } else if (nextVolume.keyPoints && nextVolume.keyPoints.length > 0) {
       boundary.forbiddenEvents = [...nextVolume.keyPoints]
     } else {
       boundary.forbiddenEvents = extractKeyEvents(
         nextVolume.summary,
         undefined,
-        (nextVolume as any).mainPlot
+        nextVolume.mainPlot
       )
     }
     boundary.endingState = `为《${nextVolume.title}》做铺垫`
@@ -177,24 +195,59 @@ function calculateSimilarity(text1: string, text2: string): number {
 
 /**
  * 检测大纲是否包含禁止的事件
+ * 改进：提高阈值，区分核心动作词和普通词
  */
 function containsForbiddenEvent(outline: string, forbiddenEvents: string[]): string | null {
   const outlineLower = outline.toLowerCase()
 
+  // 核心动作词列表（这些词匹配时权重更高）
+  const coreActionWords = new Set([
+    '击败', '战胜', '打败', '消灭', '杀死', '斩杀', '覆灭',
+    '突破', '晋级', '进阶', '觉醒', '获得', '得到', '习得',
+    '发现', '揭露', '揭开', '真相',
+    '结盟', '联合', '背叛', '反目', '决裂',
+    '逃离', '离开', '进入', '到达', '返回',
+    '比赛', '大赛', '考核', '试炼', '挑战',
+    '死亡', '牺牲', '陨落', '复活', '苏醒', '重生'
+  ])
+
   for (const event of forbiddenEvents) {
     // 关键词匹配
     const keywords = event.split(/[，。、\s]+/).filter(w => w.length > 1)
+    if (keywords.length === 0) continue
+
     let matchCount = 0
+    let coreWordMatched = false
 
     for (const keyword of keywords) {
-      if (outlineLower.includes(keyword.toLowerCase())) {
+      const keywordLower = keyword.toLowerCase()
+      if (outlineLower.includes(keywordLower)) {
         matchCount++
+        // 检查是否匹配到了核心动作词
+        if (coreActionWords.has(keyword)) {
+          coreWordMatched = true
+        }
       }
     }
 
-    // 如果超过60%的关键词匹配，认为包含了这个事件
-    if (keywords.length > 0 && matchCount / keywords.length > 0.6) {
-      return event
+    const matchRatio = matchCount / keywords.length
+
+    // 匹配条件：
+    // 1. 短事件（<=3词）：需要 100% 匹配
+    // 2. 中等事件（4-6词）：需要 75% 匹配 + 核心词匹配
+    // 3. 长事件（>6词）：需要 70% 匹配 + 核心词匹配
+    if (keywords.length <= 3) {
+      if (matchRatio >= 1.0) {
+        return event
+      }
+    } else if (keywords.length <= 6) {
+      if (matchRatio >= 0.75 && coreWordMatched) {
+        return event
+      }
+    } else {
+      if (matchRatio >= 0.7 && coreWordMatched) {
+        return event
+      }
     }
   }
 

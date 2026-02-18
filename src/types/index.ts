@@ -23,9 +23,13 @@ export interface Volume {
   title: string
   summary: string
   order: number
-  // 新增：核心要点（3-5个关键事件/转折，用于全局一致性）
+  // 本卷主线剧情（一句话概括）
+  mainPlot?: string
+  // 本卷关键事件列表（3-5个重要转折点）
+  keyEvents?: string[]
+  // 核心要点（3-5个关键事件/转折，用于全局一致性）
   keyPoints?: string[]  // 例如：["主角突破至金丹期", "击败血魔宗", "林雪牺牲"]
-  // 新增：简要章节框架（可选，用于两阶段生成）
+  // 简要章节框架（可选，用于两阶段生成）
   briefChapters?: Array<{
     chapterNumber: number
     briefOutline: string  // 20-30字的简要大纲
