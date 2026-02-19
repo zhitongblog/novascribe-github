@@ -7,7 +7,6 @@ import {
   InputNumber,
   Collapse,
   Modal,
-  message,
   Spin,
   Empty,
   Tag,
@@ -15,7 +14,8 @@ import {
   Tooltip,
   Progress,
   Popconfirm,
-  Radio
+  Radio,
+  App
 } from 'antd'
 import {
   PlusOutlined,
@@ -41,6 +41,7 @@ const { Panel } = Collapse
 
 function Outline() {
   const { projectId } = useParams<{ projectId: string }>()
+  const { modal, message } = App.useApp()
   const {
     currentProject,
     volumes,
@@ -142,7 +143,7 @@ function Outline() {
       return
     }
 
-    Modal.confirm({
+    modal.confirm({
       title: '为所有卷提取核心要点？',
       content: (
         <div>
@@ -245,7 +246,7 @@ function Outline() {
 
     if (existingChapters.length > 0) {
       // 已有章节，显示确认追加生成
-      Modal.confirm({
+      modal.confirm({
         title: '确认追加生成',
         content: (
           <div>
@@ -562,7 +563,7 @@ function Outline() {
         // 有边界问题，显示警告
         const errorCount = validationResult.errors?.length || 0
         const warningCount = validationResult.warnings?.length || 0
-        Modal.warning({
+        modal.warning({
           title: '大纲边界检测警告',
           width: 600,
           content: (
@@ -710,7 +711,7 @@ function Outline() {
       return
     }
 
-    Modal.confirm({
+    modal.confirm({
       title: '确认清空本卷所有章节',
       content: `即将删除"${volumeTitle}"的所有 ${volumeChapters.length} 章及其内容，此操作不可恢复！是否继续？`,
       okText: '确认清空',

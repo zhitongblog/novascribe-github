@@ -7,12 +7,12 @@ import {
   Dropdown,
   Modal,
   Input,
-  message,
   Spin,
   Tooltip,
   Space,
   Empty,
-  Progress
+  Progress,
+  App
 } from 'antd'
 import {
   PlusOutlined,
@@ -59,6 +59,7 @@ const { Sider, Content } = Layout
 
 function Editor() {
   const { projectId } = useParams<{ projectId: string }>()
+  const { modal, message } = App.useApp()
   const {
     currentProject,
     volumes,
@@ -354,7 +355,7 @@ function Editor() {
           // 有可能的死亡事件，提示用户确认
           const confirmMessage = buildDeathConfirmationPrompt(quickResult.potentialDeaths, currentChapter.title)
 
-          Modal.confirm({
+          modal.confirm({
             title: '检测到角色死亡事件',
             content: (
               <div className="whitespace-pre-wrap text-dark-muted">
@@ -460,7 +461,7 @@ function Editor() {
 
   // 删除卷
   const handleDeleteVolume = (volume: Volume) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除"${volume.title}"及其所有章节吗？`,
       okText: '删除',
@@ -472,7 +473,7 @@ function Editor() {
 
   // 删除章节
   const handleDeleteChapter = (chapter: Chapter) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除"${chapter.title}"吗？`,
       okText: '删除',
@@ -556,7 +557,7 @@ function Editor() {
 
   // 清空当前章节
   const handleClearChapter = () => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认清空',
       content: '确定要清空当前章节的内容吗？此操作不可恢复。',
       okText: '确认清空',
@@ -637,7 +638,7 @@ function Editor() {
       const validationResult = detectDeceasedInContent(generatedContent, characters)
       if (validationResult.hasViolation) {
         const warningMessage = formatViolationWarning(validationResult.violations)
-        Modal.warning({
+        modal.warning({
           title: '⚠️ 检测到已故角色出场',
           content: (
             <div className="whitespace-pre-wrap text-dark-muted max-h-64 overflow-y-auto">
@@ -732,7 +733,7 @@ function Editor() {
     const startChapterIndex = sortedChapters.findIndex(c => c.id === startChapter.id)
     const startChapterNumber = startChapterIndex + 1
 
-    Modal.confirm({
+    modal.confirm({
       title: '全自动写作',
       content: (
         <div>

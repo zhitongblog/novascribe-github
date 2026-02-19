@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { RouterProvider } from 'react-router-dom'
+import { App as AntdApp } from 'antd'
 import router from './router'
 
-function App() {
+function AppContent() {
   // 加载保存的主题设置
   useEffect(() => {
     const loadTheme = async () => {
@@ -23,6 +24,14 @@ function App() {
   }, [])
 
   return <RouterProvider router={router} />
+}
+
+function App() {
+  return (
+    <AntdApp>
+      <AppContent />
+    </AntdApp>
+  )
 }
 
 export default App

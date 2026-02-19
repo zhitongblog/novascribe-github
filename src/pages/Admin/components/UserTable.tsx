@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Table, Tag, Button, Space, Modal, Input, Select, Avatar, message } from 'antd'
+import { Table, Tag, Button, Space, Modal, Input, Select, Avatar, App } from 'antd'
 import {
   CheckOutlined,
   CloseOutlined,
@@ -22,6 +22,7 @@ interface AdminUser {
 }
 
 function UserTable() {
+  const { modal, message } = App.useApp()
   const {
     users,
     pagination,
@@ -98,7 +99,7 @@ function UserTable() {
       return
     }
 
-    Modal.confirm({
+    modal.confirm({
       title: '确认批量批准',
       icon: <ExclamationCircleOutlined />,
       content: `确定要批准选中的 ${selectedUserIds.length} 个用户吗？`,

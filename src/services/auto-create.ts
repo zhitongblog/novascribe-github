@@ -56,7 +56,8 @@ async function generateMicroNovel(
   styles: string[]
 ): Promise<AutoCreateResult> {
   const frameworkPrompt = buildMicroNovelPrompt(inspiration, constraints, scaleConfig, genres, styles)
-  const frameworkResponse = await generateText(frameworkPrompt)
+  // 使用较长的超时时间（2分钟）
+  const frameworkResponse = await generateText(frameworkPrompt, 2, 120000)
   return parseFrameworkResponse(frameworkResponse)
 }
 
@@ -76,7 +77,8 @@ async function generateMillionNovel(
   onProgress?.('framework', 20, '正在构建世界观和角色...')
 
   const frameworkPrompt = buildMillionFrameworkPrompt(inspiration, constraints, scaleConfig, genres, styles)
-  const frameworkResponse = await generateText(frameworkPrompt)
+  // 使用较长的超时时间（3分钟）
+  const frameworkResponse = await generateText(frameworkPrompt, 2, 180000)
   const framework = parseMillionFramework(frameworkResponse)
 
   onProgress?.('framework', 80, '正在整理分卷结构...')
@@ -720,7 +722,8 @@ export async function generateVolumeChapters(
     console.log('[AutoCreate] 提示词长度:', prompt.length)
     console.log('[AutoCreate] 调用 Gemini API...')
 
-    const response = await generateText(prompt)
+    // 使用更长的超时时间（3分钟），因为生成40章大纲需要较长时间
+    const response = await generateText(prompt, 2, 180000)
 
     console.log('[AutoCreate] Gemini 响应长度:', response.length)
     console.log('[AutoCreate] 解析章节数据...')
@@ -1057,7 +1060,8 @@ export async function generateSingleChapterOutline(
 
 返回JSON：{"title":"标题（10字内，无编号）","outline":"50-80字：场景+冲突+悬念，简洁无废话"}`
 
-  const response = await generateText(prompt)
+  // 使用较长的超时时间（2分钟）
+  const response = await generateText(prompt, 2, 120000)
 
   try {
     let jsonStr = response.trim()
@@ -1235,5 +1239,6 @@ ${styles.join('、') || '现代轻快、画面感强'}
 
 请直接输出正文内容，不要包含任何元信息或解释。`
 
-  return generateText(prompt)
+  // 使用较长的超时时间（3分钟），因为生成正文需要更长时间
+  return generateText(prompt, 2, 180000)
 }

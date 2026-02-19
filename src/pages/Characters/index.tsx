@@ -6,14 +6,14 @@ import {
   Modal,
   Input,
   Select,
-  message,
   Spin,
   Empty,
   Tag,
   Avatar,
   Tabs,
   Space,
-  Tooltip
+  Tooltip,
+  App
 } from 'antd'
 import {
   PlusOutlined,
@@ -44,6 +44,7 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 
 function Characters() {
   const { projectId } = useParams<{ projectId: string }>()
+  const { modal, message } = App.useApp()
   const {
     currentProject,
     characters,
@@ -157,7 +158,7 @@ function Characters() {
 
   // 删除角色
   const handleDelete = (character: Character) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除角色"${character.name}"吗？`,
       okText: '删除',
@@ -205,7 +206,7 @@ function Characters() {
       }
 
       // 显示确认对话框
-      Modal.confirm({
+      modal.confirm({
         title: '修复角色状态',
         width: 500,
         content: (

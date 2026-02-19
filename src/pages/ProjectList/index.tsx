@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Button, Empty, Spin, Tag, Dropdown, Modal, message } from 'antd'
+import { Card, Button, Empty, Spin, Tag, Dropdown, Modal, App } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
@@ -26,6 +26,7 @@ const scaleLabels: Record<string, string> = {
 
 function ProjectList() {
   const navigate = useNavigate()
+  const { modal, message } = App.useApp()
   const { projects, isLoading, loadProjects, deleteProject } = useProjectStore()
 
   useEffect(() => {
@@ -41,7 +42,7 @@ function ProjectList() {
   }
 
   const handleDeleteProject = (project: Project) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定要删除作品《${project.title}》吗？此操作不可恢复。`,
       okText: '删除',
