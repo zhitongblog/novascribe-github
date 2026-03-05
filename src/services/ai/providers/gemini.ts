@@ -10,15 +10,21 @@ import type { Character } from '../../../types'
 
 // Gemini 模型配置
 const GEMINI_MODELS: Record<string, ModelInfo> = {
-  'gemini-3-flash-preview': {
-    name: 'Gemini 3 Flash (预览版)',
-    description: '速度快3倍，配额更高，编程能力更强，Google推荐首选',
-    contextWindow: 2097152,
+  'gemini-3.1-flash-lite-preview': {
+    name: 'Gemini 3.1 Flash-Lite (预览版)',
+    description: '最快最省钱，比2.5 Flash快2.5倍，有免费额度，推荐首选',
+    contextWindow: 32000,
     recommended: true
   },
-  'gemini-3-pro-preview': {
-    name: 'Gemini 3 Pro (预览版)',
-    description: '最大推理深度，但速度较慢且配额限制更严格',
+  'gemini-3.1-pro-preview': {
+    name: 'Gemini 3.1 Pro (预览版)',
+    description: '最强推理能力，100万token上下文，适合复杂任务',
+    contextWindow: 1048576,
+    recommended: false
+  },
+  'gemini-3-flash-preview': {
+    name: 'Gemini 3 Flash (预览版)',
+    description: '速度快，配额高，编程能力强',
     contextWindow: 2097152,
     recommended: false
   },
@@ -42,7 +48,7 @@ const GEMINI_MODELS: Record<string, ModelInfo> = {
   }
 }
 
-const DEFAULT_MODEL = 'gemini-3-flash-preview'
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite-preview'
 
 export class GeminiProvider implements AIProvider {
   readonly type = 'gemini' as const
@@ -277,7 +283,7 @@ export class GeminiProvider implements AIProvider {
       throw new Error('Gemini API 未初始化，请先在设置中配置 API Key')
     }
 
-    const IMAGE_MODEL = 'gemini-3-pro-image-preview'
+    const IMAGE_MODEL = 'gemini-3.1-flash-image-preview'
 
     // 扩展的风格描述
     const styleDescriptions: Record<string, string> = {
