@@ -502,7 +502,10 @@ ${nextChapterOutline ? `
 【写作要求】
 
 风格：${styles.join('、') || '现代轻快、画面感强'}
-字数：约${targetWordCount}字（宁缺毋滥，不要注水）
+字数：约${targetWordCount}字，🔴🔴🔴【硬性要求：必须不少于2000字】🔴🔴🔴
+- 这是网文平台的基本要求，少于2000字的章节会被系统拒绝
+- 请充分展开大纲中的每个情节点，确保字数达标
+- 宁缺毋滥，但必须保证2000字以上
 
 【输出规范】
 1. 直接输出正文内容，不要标题、不要解释
@@ -862,8 +865,9 @@ export async function autoWriteAll(
     const globalChapterNumber = startIndex + i + 1
     console.log(`[DEBUG] 章节编号计算: startIndex=${startIndex}, i=${i}, globalChapterNumber=${globalChapterNumber}, totalChapters=${sortedChapters.length}`)
 
-    // 跳过已有内容的章节
-    if (chapter.content && chapter.content.trim().length > 500) {
+    // 跳过已有足够内容的章节（至少 1100 字才跳过，少于 1100 字需要重写）
+    // 🔥 用户要求：字数少于 1100 字的章节必须重写，不允许跳过
+    if (chapter.content && chapter.content.trim().length >= 1100) {
       previousContent = chapter.content
       recentChapters.push({ title: chapter.title, content: chapter.content })
       completed++
@@ -875,6 +879,12 @@ export async function autoWriteAll(
         status: 'complete'
       })
       continue
+    }
+
+    // 🔥 如果章节有内容但少于 1100 字，记录需要重写
+    const needsRewrite = chapter.content && chapter.content.trim().length > 0 && chapter.content.trim().length < 1100
+    if (needsRewrite) {
+      console.log(`⚠️ [AutoWrite] 章节「${chapter.title}」字数不足（${chapter.content.trim().length}字 < 1100字），需要重写`)
     }
 
     // 检查前一章是否有内容（仅在循环第一次迭代且不是全书第一章时检查）
@@ -1016,18 +1026,43 @@ export async function autoWriteAll(
         }
       }
 
-      const content = await writeChapterStrict(
-        worldSetting,
-        characters,
-        chapter.title,
-        chapter.outline,
-        previousContent,
-        nextChapter?.outline || '',
-        styles,
-        targetWordCount,
-        storySummary, // 传递剧情摘要
-        volumeContext  // 传递跨卷上下文
-      )
+      // 🔥 字数约束：生成后检查，少于 1100 字自动重写（最多重试 2 次）
+      const MIN_WORD_COUNT = 1100
+      const MAX_REWRITE_ATTEMPTS = 2
+      let content = ''
+      let rewriteAttempt = 0
+
+      while (rewriteAttempt <= MAX_REWRITE_ATTEMPTS) {
+        content = await writeChapterStrict(
+          worldSetting,
+          characters,
+          chapter.title,
+          chapter.outline,
+          previousContent,
+          nextChapter?.outline || '',
+          styles,
+          targetWordCount,
+          storySummary, // 传递剧情摘要
+          volumeContext  // 传递跨卷上下文
+        )
+
+        const wordCount = content.trim().length
+        if (wordCount >= MIN_WORD_COUNT) {
+          // 字数达标，退出循环
+          if (rewriteAttempt > 0) {
+            console.log(`✅ [AutoWrite] 章节「${chapter.title}」重写成功，字数：${wordCount}`)
+          }
+          break
+        }
+
+        rewriteAttempt++
+        if (rewriteAttempt <= MAX_REWRITE_ATTEMPTS) {
+          console.log(`⚠️ [AutoWrite] 章节「${chapter.title}」字数不足（${wordCount}字 < ${MIN_WORD_COUNT}字），正在进行第 ${rewriteAttempt} 次重写...`)
+          // 继续循环重写
+        } else {
+          console.warn(`⚠️ [AutoWrite] 章节「${chapter.title}」重写 ${MAX_REWRITE_ATTEMPTS} 次后字数仍不足（${wordCount}字），将保存当前内容`)
+        }
+      }
 
       onProgress({
         currentChapter: globalChapterNumber,  // 🔥 使用全局编号
