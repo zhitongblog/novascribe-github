@@ -73,7 +73,8 @@ async function addTextToCover(
       ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55)
 
       // 计算字体大小（根据画布宽度）
-      const titleFontSize = Math.floor(canvas.width / 9)
+      const mainTitleFontSize = Math.floor(canvas.width / 9)      // 主标题字体
+      const subTitleFontSize = Math.floor(canvas.width / 14)      // 副标题字体（较小）
       const authorFontSize = Math.floor(canvas.width / 20)
 
       // 文字绘制辅助函数 - 带描边效果
@@ -97,12 +98,34 @@ async function addTextToCover(
         ctx.fillText(text, x, y)
       }
 
+      // 解析标题，拆分主副标题
+      const titleParts = parseTitleParts(title)
+      const hasSubTitle = titleParts.sub.length > 0
+
       // 计算书名位置（底部区域，在作者名上方）
       const maxWidth = canvas.width * 0.85
-      ctx.font = `bold ${titleFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
-      const titleLines = wrapText(ctx, title, maxWidth)
-      const lineHeight = titleFontSize * 1.25
-      const totalTitleHeight = titleLines.length * lineHeight
+
+      // 计算主标题行
+      ctx.font = `bold ${mainTitleFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      const mainTitleText = titleParts.main + titleParts.separator  // 主标题 + 分隔符
+      const mainTitleLines = wrapText(ctx, mainTitleText, maxWidth)
+      const mainLineHeight = mainTitleFontSize * 1.25
+      const totalMainHeight = mainTitleLines.length * mainLineHeight
+
+      // 计算副标题行（如果有）
+      let subTitleLines: string[] = []
+      let subLineHeight = 0
+      let totalSubHeight = 0
+      if (hasSubTitle) {
+        ctx.font = `bold ${subTitleFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+        subTitleLines = wrapText(ctx, titleParts.sub, maxWidth)
+        subLineHeight = subTitleFontSize * 1.25
+        totalSubHeight = subTitleLines.length * subLineHeight
+      }
+
+      // 总标题高度
+      const titleGap = hasSubTitle ? mainTitleFontSize * 0.3 : 0  // 主副标题间距
+      const totalTitleHeight = totalMainHeight + titleGap + totalSubHeight
 
       // 作者名位置
       const authorY = canvas.height * 0.92
@@ -111,8 +134,8 @@ async function addTextToCover(
       const titleStartY = authorY - authorFontSize * 2.5 - totalTitleHeight
 
       // 添加书名背景装饰条
-      const decorY = titleStartY - titleFontSize * 0.3
-      const decorHeight = totalTitleHeight + titleFontSize * 0.6
+      const decorY = titleStartY - mainTitleFontSize * 0.3
+      const decorHeight = totalTitleHeight + mainTitleFontSize * 0.6
       const decorGradient = ctx.createLinearGradient(
         canvas.width * 0.1, 0,
         canvas.width * 0.9, 0
@@ -125,17 +148,31 @@ async function addTextToCover(
       ctx.fillStyle = decorGradient
       ctx.fillRect(0, decorY, canvas.width, decorHeight)
 
-      // 绘制书名（底部区域，带描边）
+      // 绘制主标题（大字体）
       ctx.textBaseline = 'top'
-      titleLines.forEach((line, index) => {
-        const y = titleStartY + index * lineHeight
+      mainTitleLines.forEach((line, index) => {
+        const y = titleStartY + index * mainLineHeight
         // 外层阴影
         ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
         ctx.shadowBlur = 15
         ctx.shadowOffsetX = 3
         ctx.shadowOffsetY = 3
-        drawTextWithStroke(line, canvas.width / 2, y, titleFontSize, '#ffffff', 'rgba(0, 0, 0, 0.6)', 4)
+        drawTextWithStroke(line, canvas.width / 2, y, mainTitleFontSize, '#ffffff', 'rgba(0, 0, 0, 0.6)', 4)
       })
+
+      // 绘制副标题（小字体，如果有）
+      if (hasSubTitle && subTitleLines.length > 0) {
+        const subTitleStartY = titleStartY + totalMainHeight + titleGap
+        subTitleLines.forEach((line, index) => {
+          const y = subTitleStartY + index * subLineHeight
+          // 副标题使用稍淡的颜色
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)'
+          ctx.shadowBlur = 10
+          ctx.shadowOffsetX = 2
+          ctx.shadowOffsetY = 2
+          drawTextWithStroke(line, canvas.width / 2, y, subTitleFontSize, '#f0f0f0', 'rgba(0, 0, 0, 0.5)', 3)
+        })
+      }
 
       // 重置阴影
       ctx.shadowColor = 'transparent'
@@ -210,6 +247,47 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   }
 
   return lines.slice(0, 3) // 最多3行
+}
+
+/**
+ * 解析标题，拆分为主标题和副标题
+ * 支持的分隔符：逗号（，,）、冒号（：:）、破折号（——-）、顿号（、）
+ * 分隔符保留在主标题末尾
+ */
+interface TitleParts {
+  main: string      // 主标题
+  sub: string       // 副标题（不含分隔符）
+  separator: string // 分隔符
+}
+
+function parseTitleParts(title: string): TitleParts {
+  // 定义分隔符及其优先级（越靠前优先级越高）
+  const separators = ['：', ':', '——', '—', '，', ',', '、']
+
+  for (const sep of separators) {
+    const index = title.indexOf(sep)
+    if (index > 0 && index < title.length - 1) {
+      // 找到分隔符，拆分主副标题
+      const main = title.substring(0, index)
+      const sub = title.substring(index + sep.length).trim()
+      return { main, sub, separator: sep }
+    }
+  }
+
+  // 没有找到分隔符，检查是否标题过长需要智能拆分
+  // 如果标题超过8个字符，尝试在中间位置拆分
+  if (title.length > 8) {
+    // 尝试找一个合适的拆分点（偏向后半部分）
+    const midPoint = Math.ceil(title.length * 0.6)
+    return {
+      main: title.substring(0, midPoint),
+      sub: title.substring(midPoint),
+      separator: ''
+    }
+  }
+
+  // 标题不长，不需要拆分
+  return { main: title, sub: '', separator: '' }
 }
 
 function Cover() {
