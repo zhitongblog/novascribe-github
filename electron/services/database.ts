@@ -1256,6 +1256,7 @@ export class DatabaseService {
   /**
    * 创建或更新卷（用于同步）
    * 保留原有ID
+   * 🔥 v1.0.43: 修复同步时缺少 key_points, brief_chapters, main_plot, key_events 字段
    */
   createOrUpdateVolume(data: any): any {
     const existing = this.getVolume(data.id)
@@ -1265,8 +1266,8 @@ export class DatabaseService {
 
     const now = new Date().toISOString()
     const stmt = this.db!.prepare(`
-      INSERT INTO volumes (id, project_id, title, summary, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO volumes (id, project_id, title, summary, sort_order, key_points, brief_chapters, main_plot, key_events, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     stmt.run(
@@ -1275,6 +1276,10 @@ export class DatabaseService {
       data.title || '第一卷',
       data.summary || '',
       data.order || 0,
+      JSON.stringify(data.keyPoints || []),
+      JSON.stringify(data.briefChapters || []),
+      data.mainPlot || '',
+      JSON.stringify(data.keyEvents || []),
       data.createdAt || now,
       data.updatedAt || now
     )
