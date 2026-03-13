@@ -16,6 +16,7 @@ import { useProjectStore } from '../../stores/project'
 import { SCALE_OPTIONS, GENRE_CATEGORIES, getAuthorsForGenres } from '../../types'
 import { autoCreateNovel } from '../../services/auto-create'
 import { isAIReady, initAI, setProvider, getCurrentProviderType, generateBookTitle } from '../../services/ai'
+import { getAIProviderConfig } from '../../utils'
 import { ErrorPage, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
 type CheckboxValueType = string | number | boolean
 
@@ -58,25 +59,8 @@ function Home() {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
 
-  // 获取当前配置的 AI 提供商信息
-  const getAIConfig = async (): Promise<{ provider: string; apiKey: string; model: string } | null> => {
-    const provider = await window.electron.settings.get('aiProvider') as string
-    const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
-
-    if (configs && provider && configs[provider]?.apiKey) {
-      return {
-        provider,
-        apiKey: configs[provider].apiKey,
-        model: configs[provider].model || ''
-      }
-    }
-    // 向后兼容：尝试旧的 geminiApiKey
-    const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
-    if (oldKey) {
-      return { provider: 'gemini', apiKey: oldKey, model: '' }
-    }
-    return null
-  }
+  // 获取当前配置的 AI 提供商信息（使用 utils 中支持多密钥格式的函数）
+  const getAIConfig = getAIProviderConfig
 
   // AI 生成书名
   const handleGenerateTitle = async () => {
